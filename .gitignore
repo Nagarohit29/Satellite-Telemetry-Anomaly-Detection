@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.env
+
+# Data & Models (too large for git)
+Backend/data/train/
+Backend/data/test/
+Backend/models/
+Backend/results/
+
+# Node
+node_modules/
+Frontend/dist/
+Frontend/.vite/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Docker
+*.rar
+*.zip
+
+# VS Code
+.vscode/

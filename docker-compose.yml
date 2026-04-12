@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: satellite_backend
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./Backend/data:/app/data
+      - ./Backend/models:/app/models
+      - ./Backend/results:/app/results
+    environment:
+      - DATASET=${DATASET}
+      - WINDOW_SIZE=${WINDOW_SIZE}
+      - THRESHOLD=${THRESHOLD}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - satellite_net
+
+  middleware:
+    build:
+      context: ./Middleware
+      dockerfile: Dockerfile
+    container_name: satellite_middleware
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - BACKEND_URL=http://backend:8001
+    depends_on:
+      - backend
+    networks:
+      - satellite_net
+
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+    container_name: satellite_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - middleware
+    networks:
+      - satellite_net
+
+networks:
+  satellite_net:
+    driver: bridge
