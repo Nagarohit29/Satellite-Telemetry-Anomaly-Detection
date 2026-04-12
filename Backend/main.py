@@ -1,5 +1,6 @@
 import pickle
 import os
+import torch 
 import pandas as pd
 from tqdm import tqdm
 from src.models import *
@@ -13,6 +14,8 @@ from torch.utils.data import Dataset, DataLoader, TensorDataset
 import torch.nn as nn
 from time import time
 from pprint import pprint
+
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 # from beepy import beep
 
 def convert_to_windows(data, model):
@@ -301,7 +304,7 @@ if __name__ == '__main__':
 	## Prepare data
 	trainD, testD = next(iter(train_loader)), next(iter(test_loader))
 	trainO, testO = trainD, testD
-	if model.name in ['Attention', 'DAGMM', 'USAD', 'MSCRED', 'CAE_M', 'GDN', 'MTAD_GAT', 'MAD_GAN'] or 'TranAD' in model.name: 
+	if model.name in ['Attention', 'DAGMM', 'USAD', 'MSCRED', 'CAE_M', 'GDN', 'MTAD_GAT', 'MAD_GAN'] or 'TranAD' in model.name:
 		trainD, testD = convert_to_windows(trainD, model), convert_to_windows(testD, model)
 
 	### Training phase
@@ -316,25 +319,28 @@ if __name__ == '__main__':
 		plot_accuracies(accuracy_list, f'{args.model}_{args.dataset}')
 
 	### Testing phase
-	torch.zero_grad = True
+	torch.no_grad()
 	model.eval()
 	print(f'{color.HEADER}Testing {args.model} on {args.dataset}{color.ENDC}')
 	loss, y_pred = backprop(0, model, testD, testO, optimizer, scheduler, training=False)
 
 	### Plot curves
 	if not args.test:
-		if 'TranAD' in model.name: testO = torch.roll(testO, 1, 0) 
+		if 'TranAD' in model.name: testO = torch.roll(testO, 1, 0)
 		plotter(f'{args.model}_{args.dataset}', testO, y_pred, loss, labels)
 
 	### Scores
-	df = pd.DataFrame()
+	preds = []
+	rows = []
 	lossT, _ = backprop(0, model, trainD, trainO, optimizer, scheduler, training=False)
 	for i in range(loss.shape[1]):
 		lt, l, ls = lossT[:, i], loss[:, i], labels[:, i]
-		result, pred = pot_eval(lt, l, ls); preds.append(pred)
-		df = df.append(result, ignore_index=True)
-	# preds = np.concatenate([i.reshape(-1, 1) + 0 for i in preds], axis=1)
-	# pd.DataFrame(preds, columns=[str(i) for i in range(10)]).to_csv('labels.csv')
+		result, pred = pot_eval(lt, l, ls)
+		preds.append(pred)
+		rows.append(result)
+
+	df = pd.DataFrame(rows)
+
 	lossTfinal, lossFinal = np.mean(lossT, axis=1), np.mean(loss, axis=1)
 	labelsFinal = (np.sum(labels, axis=1) >= 1) + 0
 	result, _ = pot_eval(lossTfinal, lossFinal, labelsFinal)
@@ -342,5 +348,3 @@ if __name__ == '__main__':
 	result.update(ndcg(loss, labels))
 	print(df)
 	pprint(result)
-	# pprint(getresults2(df, result))
-	# beep(4)
