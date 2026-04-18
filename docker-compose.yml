@@ -4,8 +4,8 @@ services:
 
   backend:
     build:
-      context: ./Backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Backend/Dockerfile
     container_name: satellite_backend
     ports:
       - "8001:8001"
@@ -46,8 +46,8 @@ services:
 
   middleware:
     build:
-      context: ./Middleware
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Middleware/Dockerfile
     container_name: satellite_middleware
     ports:
       - "8000:8000"
@@ -66,8 +66,8 @@ services:
 
   frontend:
     build:
-      context: ./Frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Frontend/Dockerfile
     container_name: satellite_frontend
     ports:
       - "3000:80"
