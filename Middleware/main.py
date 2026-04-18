@@ -4,7 +4,12 @@ import os
 import sys
 from dotenv import load_dotenv
 
+# Load environment variables (check current dir, then parent for root .env)
 load_dotenv()
+if not os.getenv("BACKEND_URL"):
+    parent_env = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+    if os.path.exists(parent_env):
+        load_dotenv(parent_env)
 
 # Suppress litellm's verbose debug output
 os.environ["LITELLM_LOG"] = "ERROR"
