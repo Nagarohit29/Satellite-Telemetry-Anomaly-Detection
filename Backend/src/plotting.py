@@ -3,8 +3,17 @@ from matplotlib.backends.backend_pdf import PdfPages
 import statistics
 import os, torch
 import numpy as np
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
 
-plt.style.use(['science', 'ieee'])
+try:
+    import scienceplots
+    plt.style.use(['science', 'ieee'])
+except Exception:
+    plt.style.use('seaborn-v0_8-darkgrid')
+
+import matplotlib as mpl
+mpl.rcParams['font.family'] = 'DejaVu Sans'
 plt.rcParams["text.usetex"] = False
 plt.rcParams['figure.figsize'] = 6, 2
 
@@ -19,8 +28,16 @@ def plotter(name, y_true, y_pred, ascore, labels):
 	if 'TranAD' in name: y_true = torch.roll(y_true, 1, 0)
 	os.makedirs(os.path.join('plots', name), exist_ok=True)
 	pdf = PdfPages(f'plots/{name}/output.pdf')
+	labels_dim = labels.shape[1] if labels.ndim > 1 else 1
 	for dim in range(y_true.shape[1]):
-		y_t, y_p, l, a_s = y_true[:, dim], y_pred[:, dim], labels[:, dim], ascore[:, dim]
+		y_t, y_p, a_s = y_true[:, dim], y_pred[:, dim], ascore[:, dim]
+		# Convert tensors to numpy arrays on CPU if they're on CUDA
+		y_t = y_t.cpu().numpy() if torch.is_tensor(y_t) else y_t
+		y_p = y_p.cpu().numpy() if torch.is_tensor(y_p) else y_p
+		a_s = a_s.cpu().numpy() if torch.is_tensor(a_s) else a_s
+		# Use the same dimension for labels if available, otherwise use the first one
+		l = labels[:, dim] if labels.ndim > 1 and dim < labels_dim else (labels[:, 0] if labels.ndim > 1 else labels)
+		l = l.cpu().numpy() if torch.is_tensor(l) else l
 		fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 		ax1.set_ylabel('Value')
 		ax1.set_title(f'Dimension = {dim}')

@@ -1,0 +1,15 @@
+{
+    "venvPath": ".",
+    "venv": ".venv",
+    "extraPaths": [
+        "./Backend",
+        "./Backend/src",
+        "./Middleware"
+    ],
+    "typeCheckingMode": "basic",
+    "reportMissingImports": "warning",
+    "reportMissingModuleSource": "none",
+    "reportWildcardImportFromLibrary": "none",
+    "pythonVersion": "3.11"
+}
+

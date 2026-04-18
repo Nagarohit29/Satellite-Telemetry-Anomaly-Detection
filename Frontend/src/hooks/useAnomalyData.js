@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { predict } from "../api/endpoints";
 
-const generateDummyData = (length = 200) =>
-  Array.from({ length }, () => parseFloat((Math.random() * 2 - 1).toFixed(4)));
+const NUM_FEATURES = 25; // SMAP dataset has 25 telemetry features per timestep
 
-export const useAnomalyData = (channel = "T-1", pollInterval = 5000) => {
+const generateDummyData = (length = 200) =>
+  Array.from({ length }, () =>
+    Array.from({ length: NUM_FEATURES }, () =>
+      parseFloat((Math.random() * 2 - 1).toFixed(4))
+    )
+  );
+
+export const useAnomalyData = (channel = "T-1", pollInterval = 5000, modelPreference = null) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -14,14 +20,14 @@ export const useAnomalyData = (channel = "T-1", pollInterval = 5000) => {
     setError(null);
     try {
       const inputData = generateDummyData(200);
-      const result = await predict(channel, inputData);
+      const result = await predict(channel, inputData, modelPreference);
       setData(result);
     } catch (err) {
       setError(err.message || "Failed to fetch anomaly data");
     } finally {
       setLoading(false);
     }
-  }, [channel]);
+  }, [channel, modelPreference]);
 
   useEffect(() => {
     fetchData();

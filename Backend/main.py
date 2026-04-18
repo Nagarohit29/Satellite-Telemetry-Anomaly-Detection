@@ -27,23 +27,40 @@ def convert_to_windows(data, model):
 	return torch.stack(windows)
 
 def load_dataset(dataset):
-	folder = os.path.join(output_folder, dataset)
-	if not os.path.exists(folder):
-		raise Exception('Processed Data not found.')
-	loader = []
-	for file in ['train', 'test', 'labels']:
-		if dataset == 'SMD': file = 'machine-1-1_' + file
-		if dataset == 'SMAP': file = 'P-1_' + file
-		if dataset == 'MSL': file = 'C-1_' + file
-		if dataset == 'UCR': file = '136_' + file
-		if dataset == 'NAB': file = 'ec2_request_latency_system_failure_' + file
-		loader.append(np.load(os.path.join(folder, f'{file}.npy')))
-	# loader = [i[:, debug:debug+1] for i in loader]
-	if args.less: loader[0] = cut_array(0.2, loader[0])
-	train_loader = DataLoader(loader[0], batch_size=loader[0].shape[0])
-	test_loader = DataLoader(loader[1], batch_size=loader[1].shape[0])
-	labels = loader[2]
-	return train_loader, test_loader, labels
+    folder = os.path.join(output_folder, dataset)
+    if not os.path.exists(folder):
+        raise Exception(f'Processed Data not found at {folder}')
+    loader = []
+    for file in ['train', 'test', 'labels']:
+        if dataset == 'SMD': file = 'machine-1-1_' + file
+        if dataset == 'SMAP': file = 'P-1_' + file
+        if dataset == 'MSL': file = 'C-1_' + file
+        if dataset == 'UCR': file = '136_' + file
+        if dataset == 'NAB': file = 'ec2_request_latency_system_failure_' + file
+        filepath = os.path.join(folder, f'{file}.npy')
+        data = np.load(filepath)
+        print(f'Loaded {filepath} shape: {data.shape}')
+        loader.append(data)
+
+    # Fix labels shape — must be 2D (timesteps, features)
+    if loader[2].ndim == 1:
+        loader[2] = loader[2].reshape(-1, 1)
+        print(f'Labels reshaped to: {loader[2].shape}')
+
+    # Fix train shape — must be 2D
+    if loader[0].ndim == 1:
+        loader[0] = loader[0].reshape(-1, 1)
+
+    # Fix test shape — must be 2D
+    if loader[1].ndim == 1:
+        loader[1] = loader[1].reshape(-1, 1)
+
+    if args.less: loader[0] = cut_array(0.2, loader[0])
+
+    train_loader = DataLoader(loader[0], batch_size=loader[0].shape[0])
+    test_loader  = DataLoader(loader[1], batch_size=loader[1].shape[0])
+    labels = loader[2]
+    return train_loader, test_loader, labels
 
 def save_model(model, optimizer, scheduler, epoch, accuracy_list):
 	folder = f'checkpoints/{args.model}_{args.dataset}/'
@@ -65,7 +82,7 @@ def load_model(modelname, dims):
 	fname = f'checkpoints/{args.model}_{args.dataset}/model.ckpt'
 	if os.path.exists(fname) and (not args.retrain or args.test):
 		print(f"{color.GREEN}Loading pre-trained model: {model.name}{color.ENDC}")
-		checkpoint = torch.load(fname)
+		checkpoint = torch.load(fname, weights_only=False)
 		model.load_state_dict(checkpoint['model_state_dict'])
 		optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 		scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
@@ -104,7 +121,7 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			ae1s = torch.stack(ae1s)
 			y_pred = ae1s[:, data.shape[1]-feats:data.shape[1]].view(-1, feats)
 			loss = l(ae1s, data)[:, data.shape[1]-feats:data.shape[1]].view(-1, feats)
-			return loss.detach().numpy(), y_pred.detach().numpy()
+			return loss.detach().cpu().numpy(), y_pred.detach().cpu().numpy()
 	if 'Attention' in model.name:
 		l = nn.MSELoss(reduction = 'none')
 		n = epoch + 1; w_size = model.n_window
@@ -131,7 +148,7 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 				ae1s.append(ae1)
 			ae1s, y_pred = torch.stack(ae1s), torch.stack(y_pred)
 			loss = torch.mean(l(ae1s, data), axis=1)
-			return loss.detach().numpy(), y_pred.detach().numpy()
+			return loss.detach().cpu().numpy(), y_pred.detach().cpu().numpy()
 	elif 'OmniAnomaly' in model.name:
 		if training:
 			mses, klds = [], []
@@ -154,7 +171,7 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 				y_preds.append(y_pred)
 			y_pred = torch.stack(y_preds)
 			MSE = l(y_pred, data)
-			return MSE.detach().numpy(), y_pred.detach().numpy()
+			return MSE.detach().cpu().numpy(), y_pred.detach().cpu().numpy()
 	elif 'USAD' in model.name:
 		l = nn.MSELoss(reduction = 'none')
 		n = epoch + 1; w_size = model.n_window
@@ -181,7 +198,7 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			y_pred = ae1s[:, data.shape[1]-feats:data.shape[1]].view(-1, feats)
 			loss = 0.1 * l(ae1s, data) + 0.9 * l(ae2ae1s, data)
 			loss = loss[:, data.shape[1]-feats:data.shape[1]].view(-1, feats)
-			return loss.detach().numpy(), y_pred.detach().numpy()
+			return loss.detach().cpu().numpy(), y_pred.detach().cpu().numpy()
 	elif model.name in ['GDN', 'MTAD_GAT', 'MSCRED', 'CAE_M']:
 		l = nn.MSELoss(reduction = 'none')
 		n = epoch + 1; w_size = model.n_window
@@ -211,7 +228,7 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			y_pred = xs[:, data.shape[1]-feats:data.shape[1]].view(-1, feats)
 			loss = l(xs, data)
 			loss = loss[:, data.shape[1]-feats:data.shape[1]].view(-1, feats)
-			return loss.detach().numpy(), y_pred.detach().numpy()
+			return loss.detach().cpu().numpy(), y_pred.detach().cpu().numpy()
 	elif 'GAN' in model.name:
 		l = nn.MSELoss(reduction = 'none')
 		bcel = nn.BCELoss(reduction = 'mean')
@@ -250,16 +267,18 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			y_pred = outputs[:, data.shape[1]-feats:data.shape[1]].view(-1, feats)
 			loss = l(outputs, data)
 			loss = loss[:, data.shape[1]-feats:data.shape[1]].view(-1, feats)
-			return loss.detach().numpy(), y_pred.detach().numpy()
+			return loss.detach().cpu().numpy(), y_pred.detach().cpu().numpy()
 	elif 'TranAD' in model.name:
 		l = nn.MSELoss(reduction = 'none')
-		data_x = torch.DoubleTensor(data); dataset = TensorDataset(data_x, data_x)
+		data_x = data.to(dtype=torch.float64)  # Ensure data is float64
+		dataset = TensorDataset(data_x, data_x)
 		bs = model.batch if training else len(data)
 		dataloader = DataLoader(dataset, batch_size = bs)
 		n = epoch + 1; w_size = model.n_window
 		l1s, l2s = [], []
 		if training:
 			for d, _ in dataloader:
+				d = d.to(device)  # Move data to device
 				local_bs = d.shape[0]
 				window = d.permute(1, 0, 2)
 				elem = window[-1, :, :].view(1, local_bs, feats)
@@ -276,12 +295,13 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			return np.mean(l1s), optimizer.param_groups[0]['lr']
 		else:
 			for d, _ in dataloader:
+				d = d.to(device)  # Move data to device
 				window = d.permute(1, 0, 2)
 				elem = window[-1, :, :].view(1, bs, feats)
 				z = model(window, elem)
 				if isinstance(z, tuple): z = z[1]
 			loss = l(z, elem)[0]
-			return loss.detach().numpy(), z.detach().numpy()[0]
+			return loss.detach().cpu().numpy(), z.detach().cpu().numpy()[0]
 	else:
 		y_pred = model(data)
 		loss = l(y_pred, data)
@@ -293,16 +313,20 @@ def backprop(epoch, model, data, dataO, optimizer, scheduler, training = True):
 			scheduler.step()
 			return loss.item(), optimizer.param_groups[0]['lr']
 		else:
-			return loss.detach().numpy(), y_pred.detach().numpy()
+			return loss.detach().cpu().numpy(), y_pred.detach().cpu().numpy()
 
 if __name__ == '__main__':
 	train_loader, test_loader, labels = load_dataset(args.dataset)
 	if args.model in ['MERLIN']:
 		eval(f'run_{args.model.lower()}(test_loader, labels, args.dataset)')
-	model, optimizer, scheduler, epoch, accuracy_list = load_model(args.model, labels.shape[1])
+	# Get feature count from training data, not from labels
+	trainD, testD = next(iter(train_loader)), next(iter(test_loader))
+	trainD, testD = trainD.to(device), testD.to(device)  # Move to device
+	feats = trainD.shape[1]  # Get number of features from actual data
+	model, optimizer, scheduler, epoch, accuracy_list = load_model(args.model, feats)
+	model = model.to(device)
 
 	## Prepare data
-	trainD, testD = next(iter(train_loader)), next(iter(test_loader))
 	trainO, testO = trainD, testD
 	if model.name in ['Attention', 'DAGMM', 'USAD', 'MSCRED', 'CAE_M', 'GDN', 'MTAD_GAT', 'MAD_GAN'] or 'TranAD' in model.name:
 		trainD, testD = convert_to_windows(trainD, model), convert_to_windows(testD, model)
@@ -310,7 +334,7 @@ if __name__ == '__main__':
 	### Training phase
 	if not args.test:
 		print(f'{color.HEADER}Training {args.model} on {args.dataset}{color.ENDC}')
-		num_epochs = 5; e = epoch + 1; start = time()
+		num_epochs = 20; e = epoch + 1; start = time()
 		for e in tqdm(list(range(epoch+1, epoch+num_epochs+1))):
 			lossT, lr = backprop(e, model, trainD, trainO, optimizer, scheduler)
 			accuracy_list.append((lossT, lr))
@@ -333,8 +357,11 @@ if __name__ == '__main__':
 	preds = []
 	rows = []
 	lossT, _ = backprop(0, model, trainD, trainO, optimizer, scheduler, training=False)
-	for i in range(loss.shape[1]):
-		lt, l, ls = lossT[:, i], loss[:, i], labels[:, i]
+	# Handle dimension mismatch: if labels has fewer dimensions than loss, use the first label for all
+	labels_dims = labels.shape[1] if labels.ndim > 1 else 1
+	for i in range(min(loss.shape[1], labels_dims)):
+		lt, l = lossT[:, i], loss[:, i]
+		ls = labels[:, i] if labels_dims > 1 else labels.flatten()
 		result, pred = pot_eval(lt, l, ls)
 		preds.append(pred)
 		rows.append(result)
@@ -342,7 +369,8 @@ if __name__ == '__main__':
 	df = pd.DataFrame(rows)
 
 	lossTfinal, lossFinal = np.mean(lossT, axis=1), np.mean(loss, axis=1)
-	labelsFinal = (np.sum(labels, axis=1) >= 1) + 0
+	# Handle labels shape: if 1D, use directly; if 2D, sum across dimensions
+	labelsFinal = labels.flatten() if labels.ndim == 1 else (np.sum(labels, axis=1) >= 1) + 0
 	result, _ = pot_eval(lossTfinal, lossFinal, labelsFinal)
 	result.update(hit_att(loss, labels))
 	result.update(ndcg(loss, labels))

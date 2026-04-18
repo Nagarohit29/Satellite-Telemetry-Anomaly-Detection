@@ -1,9 +1,10 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 
 class PredictRequest(BaseModel):
     channel: str = "T-1"
-    data: List[float]
+    data: Union[List[List[float]], List[float]]
+    model_preference: Optional[str] = None
 
 class AnomalyPoint(BaseModel):
     index: int
