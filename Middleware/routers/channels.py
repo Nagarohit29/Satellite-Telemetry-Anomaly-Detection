@@ -23,8 +23,8 @@ async def backend_health():
         raise HTTPException(status_code=503, detail=str(e))
 
 @router.post("/train")
-async def trigger_training():
+async def trigger_training(dataset: str = "SMAP", epochs: int = 5):
     try:
-        return await call_train()
+        return await call_train(dataset=dataset, epochs=epochs)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

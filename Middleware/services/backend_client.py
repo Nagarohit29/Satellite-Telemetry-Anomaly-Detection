@@ -10,7 +10,9 @@ async def call_infer(channel: str, data: list) -> dict:
                 f"{BACKEND_URL}/infer",
                 json={"channel": channel, "data": data}
             )
-            response.raise_for_status()
+            if response.status_code != 200:
+                detail = response.json().get('detail', 'Inference failed')
+                raise Exception(f"Backend Error: {detail}")
             return response.json()
     except httpx.ConnectError:
         raise Exception(f"Cannot connect to backend at {BACKEND_URL}")
@@ -42,7 +44,9 @@ async def call_train(dataset: str = "SMAP", epochs: int = 5) -> dict:
                 f"{BACKEND_URL}/train",
                 json={"dataset": dataset, "epochs": epochs}
             )
-            response.raise_for_status()
+            if response.status_code != 200:
+                detail = response.json().get('detail', 'Training failed')
+                raise Exception(f"Backend Error: {detail}")
             return response.json()
     except Exception as e:
         raise Exception(f"Training failed: {str(e)}")

@@ -7,6 +7,10 @@ import yaml
 import os
 import sys
 import torch
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI(title="Satellite Telemetry Backend", version="1.0.0")
 
@@ -17,9 +21,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def validate_env_vars():
+    """Validate that required environment variables are set."""
+    optional_vars = ['ANTHROPIC_API_KEY', 'BACKEND_URL']
+    missing = []
+    for var in optional_vars:
+        if not os.getenv(var):
+            print(f"WARNING: Optional environment variable {var} not set")
+
 def load_config():
-    with open("config.yaml", "r") as f:
-        return yaml.safe_load(f)
+    """Load configuration from config.yaml with error handling."""
+    config_path = os.getenv("CONFIG_PATH", "config.yaml")
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(
+            f"Configuration file not found at {config_path}. "
+            f"Please ensure config.yaml exists in the application directory."
+        )
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+            if not config:
+                raise ValueError("Config file is empty or invalid YAML")
+            return config
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in config file: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Error loading config: {str(e)}")
 
 class InferRequest(BaseModel):
     data: list
@@ -50,24 +77,30 @@ def infer(req: InferRequest):
         data = np.array(req.data)
         if data.ndim == 1:
             data = data.reshape(-1, 1)
+        print(f"Received inference request for channel {req.channel} with shape {data.shape}")
         result = run_inference(data)
         result["channel"] = req.channel
         return result
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise HTTPException(
             status_code=404,
-            detail="Model not found. Please train the model first via /train"
+            detail=f"Model not found: {str(e)}"
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/train")
 def train(req: TrainRequest):
     try:
         from train import train as run_train
-        run_train()
-        return {"status": "training started", "dataset": req.dataset}
+        # Pass dataset and epochs parameters to training function
+        run_train(dataset=req.dataset, epochs=req.epochs)
+        return {"status": "training started", "dataset": req.dataset, "epochs": req.epochs}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/channels")
@@ -84,9 +117,24 @@ def get_channels():
     return {"channels": sorted(channels)}
 
 if __name__ == "__main__":
-    config = load_config()
-    uvicorn.run(
-        app,
-        host=config["server"]["host"],
-        port=config["server"]["port"]
-    )
+    try:
+        # Validate environment variables
+        validate_env_vars()
+        
+        # Load configuration
+        config = load_config()
+        
+        # Extract server configuration
+        server_config = config.get("server", {})
+        host = server_config.get("host", "0.0.0.0")
+        port = server_config.get("port", 8001)
+        
+        print(f"Starting Satellite Telemetry Backend on {host}:{port}")
+        uvicorn.run(
+            app,
+            host=host,
+            port=port
+        )
+    except Exception as e:
+        print(f"FATAL ERROR: Failed to start application: {str(e)}")
+        sys.exit(1)
