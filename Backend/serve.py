@@ -64,11 +64,21 @@ def root():
 def health():
     cuda_available = torch.cuda.is_available()
     device_name = torch.cuda.get_device_name(0) if cuda_available else "CPU"
-    return {
+    
+    health_data = {
         "status": "healthy",
         "cuda": cuda_available,
-        "device": device_name
+        "device": device_name,
     }
+    
+    if cuda_available:
+        try:
+            health_data["vram_total"] = f"{torch.cuda.get_device_properties(0).total_memory / (1024**3):.2f} GB"
+            health_data["vram_allocated"] = f"{torch.cuda.memory_allocated(0) / (1024**3):.2f} GB"
+        except Exception:
+            pass
+            
+    return health_data
 
 @app.post("/infer")
 def infer(req: InferRequest):
