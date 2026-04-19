@@ -32,7 +32,10 @@ def load_model(config):
         raise FileNotFoundError(f"Model checkpoint not found at {model_path}. Please train the model first.")
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.debug(f"Using device: {device}")
+    if device.type == "cuda":
+        logger.info(f"✅ CUDA is available. Using device: {torch.cuda.get_device_name(0)}")
+    else:
+        logger.warning("⚠️ CUDA not detected. Falling back to CPU.")
     
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     state_dict = checkpoint.get('model_state_dict', checkpoint)

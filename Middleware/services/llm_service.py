@@ -44,10 +44,12 @@ def _classify_error(e, model_id: str) -> str:
         )
 
     # ── Connection errors ──
-    if isinstance(e, litellm.exceptions.APIConnectionError):
+    if isinstance(e, litellm.exceptions.APIConnectionError) or "connection" in err_str.lower():
         return (
             f"**[CONNECTION FAILED — {model_id.upper()}]**\n"
-            f"Could not connect to {model_id}. The service may be down or unreachable."
+            f"Could not reach the AI service. Details: {err_str[:200]}...\n"
+            f"Troubleshooting: If this is local Ollama, ensure it is running in Docker. "
+            f"If it is a cloud provider, check your API key and URL."
         )
 
     # ── Context length ──
@@ -64,82 +66,100 @@ def _classify_error(e, model_id: str) -> str:
     )
 
 
-def _get_ollama_urls() -> tuple:
-    """
-    Returns (tags_base, litellm_base) for Ollama.
+# ─────────────────────────────────────────────────────────
+# Ollama helpers
+# ─────────────────────────────────────────────────────────
 
-    - tags_base:   used for /api/tags model listing (e.g. https://ollama.com or http://127.0.0.1:11434)
-    - litellm_base: used as api_base for litellm.completion (e.g. https://api.ollama.com or http://127.0.0.1:11434)
-
-    If OLLAMA_API_BASE is explicitly set, both URLs use that value.
-    Otherwise: if an OLLAMA_API_KEY is present → cloud endpoints; else → localhost.
-    """
+def _get_local_ollama_base() -> str:
+    """Returns the base URL for local/Docker Ollama."""
     explicit_base = os.getenv("OLLAMA_API_BASE")
     if explicit_base:
-        return explicit_base, explicit_base
+        return explicit_base
+    return "http://localhost:11434"
 
+
+def _get_cloud_ollama_urls() -> tuple:
+    """Returns (tags_base, litellm_base) for Ollama Cloud."""
+    return "https://ollama.com", "https://api.ollama.com"
+
+
+def _is_ollama_local_reachable() -> str:
+    """Check if local/Docker Ollama is reachable. Returns working URL or None."""
+    base = _get_local_ollama_base()
+    bases_to_try = [base]
+
+    if "localhost" in base:
+        bases_to_try.extend(["http://127.0.0.1:11434", "http://ollama:11434"])
+    elif "127.0.0.1" in base:
+        bases_to_try.extend(["http://localhost:11434", "http://ollama:11434"])
+    elif "ollama" in base and "com" not in base:
+        bases_to_try.extend(["http://localhost:11434", "http://127.0.0.1:11434"])
+
+    for url in bases_to_try:
+        try:
+            req = urllib.request.Request(f"{url}/api/tags")
+            with urllib.request.urlopen(req, timeout=1.0) as resp:
+                if resp.status == 200:
+                    return url
+        except Exception:
+            continue
+    return None
+
+
+def _is_ollama_cloud_reachable() -> bool:
+    """Check if Ollama Cloud is reachable with the API key."""
     api_key = os.getenv("OLLAMA_API_KEY")
-    if api_key:
-        # Ollama Cloud: /api/tags lives at ollama.com, litellm uses api.ollama.com
-        return "https://ollama.com", "https://api.ollama.com"
-
-    # Local Ollama
-    return "http://127.0.0.1:11434", "http://127.0.0.1:11434"
-
-
-def _is_ollama_reachable(tags_base: str) -> bool:
-    """Quick connectivity check — returns True if Ollama (or the cloud proxy) is listening."""
+    if not api_key or not api_key.strip() or api_key.lower() == "none":
+        return False
     try:
-        req = urllib.request.Request(f"{tags_base}/api/tags")
-        api_key = os.getenv("OLLAMA_API_KEY")
-        if api_key:
-            req.add_header("Authorization", f"Bearer {api_key}")
-
-        # Cloud endpoints can be slower; use 3s for them, 1s for local
-        timeout = 3.0 if "ollama.com" in tags_base else 1.0
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        req = urllib.request.Request("https://ollama.com/api/tags")
+        req.add_header("Authorization", f"Bearer {api_key}")
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
             return resp.status == 200
     except Exception:
         return False
 
 
-def get_ollama_model(tags_base: str) -> str:
+def get_ollama_model(tags_base: str, is_cloud: bool = False) -> str:
     """Dynamically fetch a suitable model from Ollama.
 
-    For cloud endpoints the model list is sorted by popularity, which often
-    puts huge (671B / 1T) models first.  These routinely return 500 errors
-    on the shared cloud infra.  We therefore prefer small, proven models.
+    For LOCAL: uses OLLAMA_MODEL env var, or picks the first pulled model.
+    For CLOUD: ignores OLLAMA_MODEL (it's for local only), and picks from
+    the cloud catalog preferring small, proven models.
     """
-    env_model = os.getenv("OLLAMA_MODEL")
-    if env_model:
-        return env_model
+    # OLLAMA_MODEL env var only applies to LOCAL Ollama
+    if not is_cloud:
+        env_model = os.getenv("OLLAMA_MODEL")
+        if env_model:
+            return env_model
 
     # Models known to work reliably on Ollama Cloud, in preference order.
-    PREFERRED_MODELS = [
-        "gemma3:4b", "ministral-3:8b", "ministral-3:3b",
-        "gemma3:12b", "llama3", "llama3:8b", "gemma3:27b",
+    PREFERRED_CLOUD_MODELS = [
+        "gemma3:4b", "ministral-3:8b", "gemma3:12b",
+        "ministral-3:14b", "devstral-small-2:24b",
+        "minimax-m2.1", "minimax-m2.5", "glm-4.7",
     ]
 
     try:
         req = urllib.request.Request(f"{tags_base}/api/tags")
         api_key = os.getenv("OLLAMA_API_KEY")
-        if api_key:
+        if api_key and "ollama.com" in tags_base:
             req.add_header("Authorization", f"Bearer {api_key}")
 
-        timeout = 3.0 if "ollama.com" in tags_base else 1.0
+        timeout = 5.0 if "ollama.com" in tags_base else 1.0
         with urllib.request.urlopen(req, timeout=timeout) as response:
             data = json.loads(response.read().decode())
             if "models" not in data or len(data["models"]) == 0:
-                return "llama3"
+                return "gemma3:4b" if is_cloud else "llama3"
 
             available_names = {m.get("name") for m in data["models"]}
 
             # For local Ollama, just use the first model (user controls what's pulled)
-            if "ollama.com" not in tags_base:
+            if not is_cloud:
                 return data["models"][0].get("name", "llama3")
 
             # For cloud: pick the first preferred model that exists in the catalog
-            for preferred in PREFERRED_MODELS:
+            for preferred in PREFERRED_CLOUD_MODELS:
                 if preferred in available_names:
                     logger.info(f"Selected cloud model: {preferred}")
                     return preferred
@@ -147,73 +167,118 @@ def get_ollama_model(tags_base: str) -> str:
             # Fallback: pick the first model under 100B params (by name heuristic)
             for m in data["models"]:
                 name = m.get("name", "")
-                # Skip models with size hints suggesting >100B
-                if any(tag in name for tag in [":671b", ":1t", ":480b", ":235b", ":120b"]):
+                if any(tag in name for tag in [":671b", ":1t", ":480b", ":235b", ":120b", ":123b"]):
                     continue
                 return name
 
             # Ultimate fallback
-            return data["models"][0].get("name", "llama3")
-    except Exception:
-        pass
-    return "llama3"
+            return data["models"][0].get("name", "gemma3:4b")
+    except Exception as e:
+        logger.warning(f"Failed to fetch Ollama model list from {tags_base}: {e}")
+    return "gemma3:4b" if is_cloud else "llama3"
 
 
+# ─────────────────────────────────────────────────────────
+# Model listing for the UI
+# ─────────────────────────────────────────────────────────
 
 def get_available_models() -> list:
-    """Returns a list of available AI models and their status."""
+    """Returns a list of available AI models and their status.
+    
+    Ollama Local and Ollama Cloud are listed as SEPARATE entries.
+    Models without API keys are marked as unavailable.
+    """
+    # Force refresh environment variables to pick up keys saved in Web UI
+    from main import reload_env
+    reload_env()
+
     models = []
 
-    tags_base, _ = _get_ollama_urls()
-    api_key = os.getenv("OLLAMA_API_KEY")
-
-    has_ollama = _is_ollama_reachable(tags_base)
-
-    ollama_model = get_ollama_model(tags_base) if has_ollama else "llama3"
+    # ── 1. Ollama Local (always shown — available if server reachable) ──
+    local_base = _get_local_ollama_base()
+    working_local = _is_ollama_local_reachable()
+    local_model_name = get_ollama_model(working_local if working_local else local_base)
     models.append({
-        "id": "ollama",
-        "name": f"Ollama ({ollama_model})",
-        "available": has_ollama
+        "id": "ollama_local",
+        "name": f"Ollama Local ({local_model_name})",
+        "available": bool(working_local),
+        "type": "device",  # UI hint: this is a local/device model
     })
 
+    # ── 2. Ollama Cloud (ALWAYS shown — like other cloud models) ──
+    has_ollama_key = bool(os.getenv("OLLAMA_API_KEY"))
+    if has_ollama_key:
+        cloud_tags_base, _ = _get_cloud_ollama_urls()
+        cloud_model_name = get_ollama_model(cloud_tags_base, is_cloud=True)
+        cloud_name = f"Ollama Cloud ({cloud_model_name})"
+    else:
+        cloud_name = "Ollama Cloud"
+    models.append({
+        "id": "ollama_cloud",
+        "name": cloud_name,
+        "available": has_ollama_key,
+        "type": "cloud",
+    })
+
+    # ── 3. Cloud API models (available only when keys are present) ──
     models.append({
         "id": "gemini",
         "name": "Google Gemini",
-        "available": bool(os.getenv("GEMINI_API_KEY"))
+        "available": bool(os.getenv("GEMINI_API_KEY")),
+        "type": "cloud",
     })
 
     models.append({
         "id": "openai",
         "name": "OpenAI GPT-4o",
-        "available": bool(os.getenv("OPENAI_API_KEY"))
+        "available": bool(os.getenv("OPENAI_API_KEY")),
+        "type": "cloud",
     })
 
     models.append({
         "id": "anthropic",
         "name": "Anthropic Claude",
-        "available": bool(os.getenv("ANTHROPIC_API_KEY"))
+        "available": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "type": "cloud",
     })
 
     return models
 
 
+# ─────────────────────────────────────────────────────────
+# Model selection / fallback logic
+# ─────────────────────────────────────────────────────────
+
 def _build_models_to_try(preference: str = None) -> list:
     """
     Build an ordered list of model configs to attempt.
+    
+    Rules:
+    1. If user explicitly selected a model, try ONLY that model (no silent fallback to others).
+    2. If no model selected (Auto Fallback), try: Local Ollama > Cloud APIs with keys.
+    3. Cloud API models are NEVER auto-selected — only used when explicitly chosen.
     """
-    tags_base, litellm_base = _get_ollama_urls()
 
     # ── helper to build per-provider configs ──
-    def _ollama_cfg():
-        cfg = {
-            "id": "ollama",
-            "model": f"ollama/{get_ollama_model(tags_base)}",
-            "api_base": litellm_base,
+    def _ollama_local_cfg(api_base=None):
+        base = api_base or _get_local_ollama_base()
+        return {
+            "id": "ollama_local",
+            "model": f"ollama/{get_ollama_model(base)}",
+            "api_base": base,
+            "api_key": "ollama",  # Dummy key for litellm compatibility
         }
+
+    def _ollama_cloud_cfg():
+        _, litellm_base = _get_cloud_ollama_urls()
+        cloud_tags_base, _ = _get_cloud_ollama_urls()
         api_key = os.getenv("OLLAMA_API_KEY")
-        if api_key:
-            cfg["api_key"] = api_key
-        return cfg
+        return {
+            "id": "ollama_cloud",
+            "model": f"ollama/{get_ollama_model(cloud_tags_base, is_cloud=True)}",
+            "api_base": litellm_base,
+            "api_key": api_key,
+        }
 
     def _gemini_cfg():
         return {
@@ -238,43 +303,62 @@ def _build_models_to_try(preference: str = None) -> list:
 
     # ── user explicitly chose a model ──
     if preference:
-        cfgs = {
-            "ollama": _ollama_cfg,
+        builders = {
+            "ollama_local": None,  # special handling below
+            "ollama_cloud": _ollama_cloud_cfg,
             "gemini": _gemini_cfg,
             "openai": _openai_cfg,
             "anthropic": _anthropic_cfg,
+            # Legacy ID compatibility
+            "ollama": None,
         }
-        builder = cfgs.get(preference)
+
+        if preference in ("ollama_local", "ollama"):
+            # User wants local Ollama specifically
+            working_base = _is_ollama_local_reachable()
+            if working_base:
+                return [_ollama_local_cfg(working_base)]
+            logger.warning(f"Local Ollama not reachable. No fallback — user explicitly chose it.")
+            return []  # Don't silently fall through to cloud APIs
+
+        if preference == "ollama_cloud":
+            api_key = os.getenv("OLLAMA_API_KEY")
+            if api_key and api_key.strip() and api_key.lower() != "none":
+                return [_ollama_cloud_cfg()]
+            logger.warning("Ollama Cloud selected but no API key configured.")
+            return []
+
+        builder = builders.get(preference)
         if builder:
             cfg = builder()
-            # Pre-flight: skip cloud models if API key is missing
-            if preference != "ollama" and not cfg.get("api_key"):
-                logger.info(f"Skipping {preference}: no API key configured.")
-                return []  # Empty list → caller will return static fallback
-            # Pre-flight: skip ollama if not reachable
-            if preference == "ollama" and not _is_ollama_reachable(tags_base):
-                logger.info("Skipping ollama: server not reachable. Falling back to auto-discovery.")
-                # If selected model is down, don't just fail — fall through to auto-discovery
-                # to find any other working model.
-            else:
+            if cfg.get("api_key"):
                 return [cfg]
-        # Unknown preference → fall through to auto
-        logger.warning(f"Unknown model preference '{preference}', falling back to auto")
+            logger.warning(f"Model '{preference}' selected but no API key found.")
+            return []
+        else:
+            logger.warning(f"Unknown model preference '{preference}'")
+            return []
 
-    # ── auto-discover: only include models that have credentials/connectivity ──
+    # ── Auto Fallback (no model selected) ──
+    # Priority: Local Ollama ONLY. Cloud APIs are NOT auto-selected.
+    # User must explicitly choose cloud models in settings.
     models = []
-    if _is_ollama_reachable(tags_base):
-        models.append(_ollama_cfg())
 
-    if os.getenv("GEMINI_API_KEY"):
-        models.append(_gemini_cfg())
-    if os.getenv("OPENAI_API_KEY"):
-        models.append(_openai_cfg())
-    if os.getenv("ANTHROPIC_API_KEY"):
-        models.append(_anthropic_cfg())
+    working_base = _is_ollama_local_reachable()
+    if working_base:
+        models.append(_ollama_local_cfg(working_base))
+
+    # Also include Ollama Cloud if key is present (it's free-tier, reasonable as fallback)
+    ollama_key = os.getenv("OLLAMA_API_KEY")
+    if ollama_key and ollama_key.strip() and ollama_key.lower() != "none":
+        models.append(_ollama_cloud_cfg())
 
     return models
 
+
+# ─────────────────────────────────────────────────────────
+# Severity helper
+# ─────────────────────────────────────────────────────────
 
 def get_severity(score: float, anomaly_count: int, total: int) -> str:
     ratio = anomaly_count / total if total > 0 else 0
@@ -287,6 +371,10 @@ def get_severity(score: float, anomaly_count: int, total: int) -> str:
     else:
         return "LOW"
 
+
+# ─────────────────────────────────────────────────────────
+# Incident report generation
+# ─────────────────────────────────────────────────────────
 
 def generate_incident_report(
     channel: str,
@@ -337,7 +425,13 @@ Keep it professional and concise like a real operations report."""
             api_base = model_cfg.get("api_base")
             api_key = model_cfg.get("api_key")
 
-            logger.info(f"Generating report with {model_name}")
+            # Explicit logging for verification
+            if model_cfg["id"] == "ollama_local":
+                logger.info(f"Using OLLAMA LOCAL endpoint: {api_base}")
+            elif model_cfg["id"] == "ollama_cloud":
+                logger.info(f"Using OLLAMA CLOUD endpoint: {api_base}")
+            else:
+                logger.info(f"Generating report with {model_name}")
 
             kwargs = {
                 "model": model_name,
@@ -385,8 +479,16 @@ Keep it professional and concise like a real operations report."""
     )
 
 
+# ─────────────────────────────────────────────────────────
+# Chat
+# ─────────────────────────────────────────────────────────
+
 def chat_with_llm(messages: list, model_preference: str = None) -> str:
-    """Handle multi-turn conversations with the LLM."""
+    """Handle multi-turn conversations"""
+    # Force refresh environment variables
+    from main import reload_env
+    reload_env()
+
     models_to_try = _build_models_to_try(model_preference)
 
     if not models_to_try:
@@ -403,7 +505,13 @@ def chat_with_llm(messages: list, model_preference: str = None) -> str:
             api_base = model_cfg.get("api_base")
             api_key = model_cfg.get("api_key")
 
-            logger.info(f"Chat attempt using {model_name}")
+            # Explicit logging for verification
+            if model_cfg["id"] == "ollama_local":
+                logger.info(f"Chat using OLLAMA LOCAL endpoint: {api_base}")
+            elif model_cfg["id"] == "ollama_cloud":
+                logger.info(f"Chat using OLLAMA CLOUD endpoint: {api_base}")
+            else:
+                logger.info(f"Chat using {model_name}")
 
             kwargs = {
                 "model": model_name,

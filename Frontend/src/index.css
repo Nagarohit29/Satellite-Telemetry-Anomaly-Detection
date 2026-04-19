@@ -146,6 +146,15 @@ h1, h2, h3, h4 {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 @keyframes slideIn {
   from { transform: translateX(20px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
@@ -153,6 +162,39 @@ h1, h2, h3, h4 {
 
 .slide-in {
   animation: slideIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 10px;
+}
+
+.skeleton-card {
+  height: 56px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Settings Popover */
@@ -165,12 +207,12 @@ h1, h2, h3, h4 {
   padding: 20px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   transform-origin: top right;
-  animation: popIn 0.2s ease-out forwards;
+  animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes popIn {
-  from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+  from { transform: scale(0.95) translateY(-4px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .settings-header {
@@ -203,7 +245,17 @@ h1, h2, h3, h4 {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  animation: fadeInUp 0.3s ease-out forwards;
+  opacity: 0;
 }
+
+/* Stagger model card animations */
+.model-list > div:nth-child(1) .model-card { animation-delay: 0.05s; }
+.model-list > div:nth-child(2) .model-card { animation-delay: 0.1s; }
+.model-list > div:nth-child(3) .model-card { animation-delay: 0.15s; }
+.model-list > div:nth-child(4) .model-card { animation-delay: 0.2s; }
+.model-list > div:nth-child(5) .model-card { animation-delay: 0.25s; }
+.model-list > div:nth-child(6) .model-card { animation-delay: 0.3s; }
 
 .model-card:hover:not(.disabled) {
   background: rgba(255, 255, 255, 0.08);
@@ -252,7 +304,7 @@ h1, h2, h3, h4 {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   background: rgba(0, 0, 0, 0.2);
 }
 
@@ -262,11 +314,18 @@ h1, h2, h3, h4 {
   box-shadow: 0 0 10px var(--primary-dim);
 }
 
-/* Modal Overlay (for backward compatibility if needed) */
+/* Modal Overlay */
 .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   z-index: 999;
+  animation: fadeIn 0.2s ease-out forwards;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+

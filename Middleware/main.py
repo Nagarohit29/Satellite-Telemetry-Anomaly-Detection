@@ -4,12 +4,22 @@ import os
 import sys
 from dotenv import load_dotenv
 
-# Load environment variables (check current dir, then parent for root .env)
-load_dotenv()
-if not os.getenv("BACKEND_URL"):
-    parent_env = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-    if os.path.exists(parent_env):
-        load_dotenv(parent_env)
+# Force reload environment variables (checks project root .env for Web UI overrides)
+def reload_env(path=None):
+    """Dynamically reloads environment variables from a specific path, /app/.env, or local .env."""
+    docker_env = "/app/.env"
+    root_env = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+    
+    # Priority: 1. Passed path, 2. Docker root, 3. Local root
+    targets = [path, docker_env, root_env]
+    for target in targets:
+        if target and os.path.exists(target):
+            load_dotenv(target, override=True)
+            break
+    load_dotenv()
+
+# Initial load
+reload_env()
 
 # Suppress litellm's verbose debug output
 os.environ["LITELLM_LOG"] = "ERROR"
