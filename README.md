@@ -49,7 +49,33 @@ Located in [`/Frontend`](./Frontend), a modern web interface for operators.
    ```bash
    docker-compose up --build
    ```
-4. Access the dashboard at `http://localhost:3000`.
+4. Access the dashboard at `http://localhost`.
+
+### Run From Docker Hub
+If you do not want to clone the repository, you can pull and run the published
+single-container image directly from Docker Hub.
+
+1. Pull the image:
+   ```bash
+   docker pull <your-dockerhub-username>/satellite-telemetry-anomaly-detection:latest
+   ```
+2. Run the container:
+   ```bash
+   docker run --gpus all --name satellite-telemetry \
+     -p 80:80 -p 8000:8000 -p 8001:8001 -p 11434:11434 \
+     <your-dockerhub-username>/satellite-telemetry-anomaly-detection:latest
+   ```
+3. Open the application:
+   - Frontend: `http://localhost`
+   - Middleware API: `http://localhost:8000`
+   - Backend API: `http://localhost:8001`
+   - Ollama API: `http://localhost:11434`
+
+Notes for Docker Hub users:
+- The dashboard currently replays recorded SMAP telemetry data bundled with the image.
+- Ollama Cloud keys are session-only by default and are not written to `.env`
+  unless you explicitly change that behavior in the app.
+- NVIDIA Container Toolkit is required for GPU access with `--gpus all`.
 
 ### Local Development Setup
 1. Create and activate a virtual environment:
