@@ -29,3 +29,9 @@ Frontend/.vite/
 
 # VS Code
 .vscode/
+
+#venv
+.venv/
+env/
+__pycache__/
+*.pyc
