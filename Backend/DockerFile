@@ -13,6 +13,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# ── GPU: tell the NVIDIA container runtime to expose all GPUs
+# and enable compute + utility capabilities (required for CUDA + torch).
+# Mirrors the ENV set in the monolithic Dockerfile.
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
 # Install system dependencies and Python 3.11
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \

@@ -10,7 +10,12 @@ __pycache__/
 venv/
 ENV/
 env/
+
+# .env files — NEVER bake real API keys into the image.
+# The Dockerfiles create seed .env files via RUN printf commands.
+# docker-compose mounts the real .env at runtime: - .env:/app/.env
 .env
+Middleware/.env
 
 # Node.js
 node_modules/
@@ -25,17 +30,27 @@ build/
 .next/
 out/
 
-# Data and Models (We mount these via volumes)
-# Backend/data/
-# Backend/models/
-# Backend/checkpoints/
-# Backend/results/
+# Data and Models. Keep large datasets/results out of the image, but include
+# the trained checkpoint needed for zero-config inference.
+Backend/data/train/
+Backend/data/test/
+Backend/models/
+Backend/results/
+Backend/checkpoints/
+!Backend/checkpoints/
+!Backend/checkpoints/TranAD_SMAP/
+!Backend/checkpoints/TranAD_SMAP/model.ckpt
+
+# Notebooks and scratch files
+notebooks/
+scratch/
+Backend/scratch/
+Backend/plots/
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Docker
-Dockerfile
+# Docker files (not needed in build context)
 docker-compose*
 .dockerignore

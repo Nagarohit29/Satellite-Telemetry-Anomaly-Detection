@@ -15,7 +15,14 @@ export default function Dashboard({ selectedModel }) {
       <div className="glass-panel" style={{ padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <LayoutDashboard size={20} color="var(--primary)" />
-          <h2 style={{ margin: 0, fontSize: 16 }}>Live Telemetry Monitor</h2>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16 }}>Telemetry Replay Monitor</h2>
+            {data && (
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                {data.telemetryLive ? "Live telemetry feed" : `Recorded ${data.telemetryDataset || "telemetry"} replay`}
+              </div>
+            )}
+          </div>
         </div>
         
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

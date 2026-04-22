@@ -42,6 +42,18 @@ export const getChannels = async () => {
   }
 };
 
+export const getTelemetry = async (channel, offset = 0, length = 200, step = 50) => {
+  try {
+    const response = await client.get(`/telemetry/${channel}`, {
+      params: { offset, length, step },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Get telemetry API error:", error);
+    throw new Error(`Failed to fetch telemetry: ${error.message}`);
+  }
+};
+
 export const getBackendHealth = async () => {
   try {
     const response = await client.get("/health");
@@ -84,9 +96,9 @@ export const getLLMModels = async () => {
   }
 };
 
-export const updateAPIKey = async (provider, key) => {
+export const updateAPIKey = async (provider, key, persist = false) => {
   try {
-    const response = await client.post("/config/keys", { provider, key });
+    const response = await client.post("/config/keys", { provider, key, persist });
     return response.data;
   } catch (error) {
     console.error("Update API key error:", error);
