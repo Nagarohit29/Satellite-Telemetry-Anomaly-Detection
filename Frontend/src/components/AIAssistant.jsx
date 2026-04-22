@@ -32,8 +32,12 @@ export default function AIAssistant({ selectedModel }) {
 
     try {
       // Send history to API
-      // Filter out only role and content for API
-      const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }));
+      // Send only real conversation turns. The initial UI greeting is display-only.
+      const firstUserIndex = newMessages.findIndex(m => m.role === "user");
+      const apiMessages = newMessages
+        .slice(Math.max(firstUserIndex, 0))
+        .filter(m => !m.isError)
+        .map(m => ({ role: m.role, content: m.content }));
       
       const contextStr = "User is currently viewing the dashboard."; // In a full implementation, you could pass the current channel/stats here.
       

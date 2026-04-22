@@ -7,11 +7,13 @@ def load_config():
     with open("config.yaml", "r") as f:
         return yaml.safe_load(f)
 
-def train():
+def train(dataset=None, epochs=None):
     config = load_config()
     model = config["model"]
-    dataset = config["training"].get("dataset", config["dataset"])
-    epochs = config["training"]["epochs"]
+    
+    # Use provided values or fallback to config
+    dataset = dataset or config["training"].get("dataset", config["dataset"])
+    epochs = epochs or config["training"]["epochs"]
 
     print(f"Starting training: model={model}, dataset={dataset}, epochs={epochs}")
 

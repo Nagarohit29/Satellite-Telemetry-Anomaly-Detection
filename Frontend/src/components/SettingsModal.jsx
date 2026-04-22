@@ -28,7 +28,14 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
     try {
       setLoading(true);
       const data = await getLLMModels();
-      setModels(data.models || []);
+      const nextModels = data.models || [];
+      setModels(nextModels);
+
+      const selectedConfig = nextModels.find(model => model.id === selectedModel);
+      if (selectedModel && selectedConfig && !selectedConfig.available) {
+        setSelectedModel('');
+        localStorage.removeItem('selectedModel');
+      }
       
       // Don't auto-select — let user choose (or leave empty for auto fallback)
     } catch (err) {
@@ -51,10 +58,10 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
     try {
       setIsSaving(true);
       setSaveStatus(null);
-      await updateAPIKey(provider, key);
+      await updateAPIKey(provider, key, false);
       setEditingProvider(null);
       setApiKeyInput('');
-      setSaveStatus({ type: 'success', msg: `${provider} key saved successfully!` });
+      setSaveStatus({ type: 'success', msg: `${provider} key loaded for this session only.` });
       await fetchModels(); // Refresh to show new status
     } catch (err) {
       setSaveStatus({ type: 'error', msg: err.message || 'Failed to save key' });
@@ -92,7 +99,7 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
 
   // Get the proper status text for a model
   const getStatusText = (model) => {
-    if (selectedModel === model.id) return 'CURRENTLY ACTIVE';
+    if (selectedModel === model.id && model.available) return 'CURRENTLY ACTIVE';
     if (model.available) return 'AVAILABLE — CLICK TO SELECT';
     if (model.type === 'device') return 'SERVER NOT RUNNING';
     return 'MISSING API KEY';

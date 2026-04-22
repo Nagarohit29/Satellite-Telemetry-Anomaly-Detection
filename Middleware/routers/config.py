@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import os
 import logging
-from dotenv import set_key, unset_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,9 +37,60 @@ def _get_env_paths() -> list:
     return paths
 
 
+def _read_env_lines(env_path: str) -> list:
+    if not os.path.exists(env_path):
+        return []
+    with open(env_path, "r", encoding="utf-8") as f:
+        return f.read().splitlines()
+
+
+def _write_env_lines(env_path: str, lines: list) -> None:
+    parent = os.path.dirname(env_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    content = "\n".join(lines)
+    if content and not content.endswith("\n"):
+        content += "\n"
+    with open(env_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(content)
+
+
+def _format_env_assignment(env_var: str, value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'{env_var}="{escaped}"'
+
+
+def _set_env_value(env_path: str, env_var: str, value: str) -> None:
+    lines = _read_env_lines(env_path)
+    updated = []
+    found = False
+
+    for line in lines:
+        if line.startswith(f"{env_var}="):
+            if not found:
+                updated.append(_format_env_assignment(env_var, value))
+                found = True
+            continue
+        updated.append(line)
+
+    if not found:
+        if updated and updated[-1].strip():
+            updated.append("")
+        updated.append(_format_env_assignment(env_var, value))
+
+    _write_env_lines(env_path, updated)
+
+
+def _unset_env_value(env_path: str, env_var: str) -> None:
+    lines = _read_env_lines(env_path)
+    updated = [line for line in lines if not line.startswith(f"{env_var}=")]
+    _write_env_lines(env_path, updated)
+
+
 class KeyUpdate(BaseModel):
     provider: str
     key: str
+    persist: bool = False
 
 PROVIDER_TO_ENV = {
     "gemini": "GEMINI_API_KEY",
@@ -83,20 +133,28 @@ async def update_key(data: KeyUpdate):
 
     clean_key = data.key.strip()
 
-    # Write to ALL .env files for consistency
-    env_paths = _get_env_paths()
-    for env_path in env_paths:
-        try:
-            set_key(env_path, env_var, clean_key)
-            logger.info(f"API key written to {env_path} for {provider} ({env_var})")
-        except Exception as e:
-            logger.warning(f"Failed to write key to {env_path}: {e}")
-
     # Also inject into the running process for immediate use
     os.environ[env_var] = clean_key
 
-    logger.info(f"API key updated for {provider} ({env_var})")
-    return {"status": "success", "message": f"{provider.capitalize()} API key saved"}
+    if data.persist:
+        env_paths = _get_env_paths()
+        successful_writes = 0
+        for env_path in env_paths:
+            try:
+                _set_env_value(env_path, env_var, clean_key)
+                successful_writes += 1
+                logger.info(f"API key written to {env_path} for {provider} ({env_var})")
+            except Exception as e:
+                logger.warning(f"Failed to write key to {env_path}: {e}")
+
+        if successful_writes == 0:
+            raise HTTPException(status_code=500, detail="Failed to persist API key to env files")
+
+        logger.info(f"API key persisted for {provider} ({env_var})")
+        return {"status": "success", "message": f"{provider.capitalize()} API key saved"}
+
+    logger.info(f"API key loaded in memory for {provider} ({env_var})")
+    return {"status": "success", "message": f"{provider.capitalize()} API key loaded for this session"}
 
 
 @router.delete("/config/keys/{provider}")
@@ -110,14 +168,19 @@ async def delete_key(provider: str):
     if env_var is None:
         return {"status": "success", "message": "Local Ollama has no API key to remove"}
 
-    # Remove from ALL .env files
+    # Remove from all .env files using an in-place update.
     env_paths = _get_env_paths()
+    successful_updates = 0
     for env_path in env_paths:
         try:
-            unset_key(env_path, env_var)
+            _unset_env_value(env_path, env_var)
+            successful_updates += 1
             logger.info(f"API key removed from {env_path} for {provider} ({env_var})")
         except Exception as e:
             logger.warning(f"Failed to remove key from {env_path}: {e}")
+
+    if successful_updates == 0:
+        raise HTTPException(status_code=500, detail="Failed to update env files")
 
     # Remove from current running process
     if env_var in os.environ:

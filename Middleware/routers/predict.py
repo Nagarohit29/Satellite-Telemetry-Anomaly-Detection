@@ -20,6 +20,23 @@ router = APIRouter()
 _reported_anomalies: dict[str, int] = {}
 
 
+def _build_static_report(
+    channel: str,
+    severity: str,
+    score: float,
+    threshold: float,
+    anomaly_count: int,
+    total_windows: int,
+) -> str:
+    ratio = round((anomaly_count / total_windows) * 100, 2) if total_windows > 0 else 0
+    return (
+        f"Incident Summary: Channel {channel} | Severity: {severity}\n"
+        f"Score {score:.4f} exceeded threshold {threshold}. "
+        f"{anomaly_count}/{total_windows} windows anomalous ({ratio}%). "
+        f"Review telemetry and use the AI assistant on demand for deeper analysis."
+    )
+
+
 @router.post("/predict")
 async def predict(req: PredictRequest):
     try:
@@ -42,15 +59,25 @@ async def predict(req: PredictRequest):
             prev_count = _reported_anomalies.get(req.channel)
             if prev_count != anomaly_count:
                 _reported_anomalies[req.channel] = anomaly_count
-                report = generate_incident_report(
-                    channel=req.channel,
-                    score=max_score,
-                    anomaly_count=anomaly_count,
-                    total_windows=total_windows,
-                    threshold=threshold,
-                    device=device,
-                    model_preference=req.model_preference
-                )
+                if req.model_preference:
+                    report = generate_incident_report(
+                        channel=req.channel,
+                        score=max_score,
+                        anomaly_count=anomaly_count,
+                        total_windows=total_windows,
+                        threshold=threshold,
+                        device=device,
+                        model_preference=req.model_preference
+                    )
+                else:
+                    report = _build_static_report(
+                        channel=req.channel,
+                        severity=severity,
+                        score=max_score,
+                        threshold=threshold,
+                        anomaly_count=anomaly_count,
+                        total_windows=total_windows,
+                    )
                 add_alert(
                     channel=req.channel,
                     score=max_score,

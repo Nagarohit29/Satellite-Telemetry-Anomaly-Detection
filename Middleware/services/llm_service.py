@@ -2,6 +2,7 @@ import os
 import litellm
 import litellm.exceptions
 import logging
+import urllib.error
 import urllib.request
 import json
 
@@ -14,6 +15,7 @@ litellm.suppress_debug_info = True
 def _classify_error(e, model_id: str) -> str:
     """Extract a real, actionable error message from litellm exceptions."""
     err_str = str(e)
+    err_lower = err_str.lower()
 
     # ── Rate Limit (429) ──
     if isinstance(e, litellm.exceptions.RateLimitError):
@@ -28,7 +30,12 @@ def _classify_error(e, model_id: str) -> str:
         )
 
     # ── Authentication (401 / invalid key) ──
-    if isinstance(e, litellm.exceptions.AuthenticationError):
+    if (
+        isinstance(e, litellm.exceptions.AuthenticationError)
+        or "unauthorized" in err_lower
+        or "invalid api key" in err_lower
+        or "401" in err_lower
+    ):
         return (
             f"**[AUTHENTICATION ERROR — {model_id.upper()}]**\n"
             f"The API key for {model_id} is invalid or has been revoked.\n"
@@ -36,7 +43,7 @@ def _classify_error(e, model_id: str) -> str:
         )
 
     # ── Budget / Quota Exceeded ──
-    if isinstance(e, litellm.exceptions.BudgetExceededError) or '429' in err_str or 'quota' in err_str.lower():
+    if isinstance(e, litellm.exceptions.BudgetExceededError) or '429' in err_str or 'quota' in err_lower:
         return (
             f"**[QUOTA EXCEEDED — {model_id.upper()}]**\n"
             f"Your API quota or spending limit has been reached for {model_id}.\n"
@@ -44,7 +51,7 @@ def _classify_error(e, model_id: str) -> str:
         )
 
     # ── Connection errors ──
-    if isinstance(e, litellm.exceptions.APIConnectionError) or "connection" in err_str.lower():
+    if isinstance(e, litellm.exceptions.APIConnectionError) or "connection" in err_lower:
         return (
             f"**[CONNECTION FAILED — {model_id.upper()}]**\n"
             f"Could not reach the AI service. Details: {err_str[:200]}...\n"
@@ -79,8 +86,8 @@ def _get_local_ollama_base() -> str:
 
 
 def _get_cloud_ollama_urls() -> tuple:
-    """Returns (tags_base, litellm_base) for Ollama Cloud."""
-    return "https://ollama.com", "https://api.ollama.com"
+    """Returns (tags_base, api_base) for Ollama Cloud."""
+    return "https://ollama.com", "https://ollama.com"
 
 
 def _is_ollama_local_reachable() -> str:
@@ -176,6 +183,103 @@ def get_ollama_model(tags_base: str, is_cloud: bool = False) -> str:
     except Exception as e:
         logger.warning(f"Failed to fetch Ollama model list from {tags_base}: {e}")
     return "gemma3:4b" if is_cloud else "llama3"
+
+
+def _strip_ollama_prefix(model_name: str) -> str:
+    """Return the native Ollama model name from a LiteLLM-style model id."""
+    prefix = "ollama/"
+    if model_name.startswith(prefix):
+        return model_name[len(prefix):]
+    return model_name
+
+
+def _normalize_ollama_cloud_messages(messages: list) -> list:
+    """Make chat history compatible with Ollama Cloud's strict role ordering."""
+    system_parts = []
+    normalized = []
+
+    for raw_message in messages:
+        role = (raw_message.get("role") or "user").lower()
+        content = str(raw_message.get("content") or "").strip()
+        if not content:
+            continue
+
+        if role == "system":
+            system_parts.append(content)
+            continue
+
+        if role not in ("user", "assistant"):
+            role = "user"
+
+        # The UI has a canned assistant greeting before the first user message.
+        # Ollama Cloud rejects histories that start with assistant.
+        if not normalized and role == "assistant":
+            continue
+
+        if normalized and normalized[-1]["role"] == role:
+            normalized[-1]["content"] = f"{normalized[-1]['content']}\n\n{content}"
+            continue
+
+        normalized.append({"role": role, "content": content})
+
+    if not normalized:
+        normalized.append({"role": "user", "content": "Hello."})
+
+    if normalized[0]["role"] != "user":
+        normalized.insert(0, {"role": "user", "content": "Continue the conversation."})
+
+    if system_parts:
+        instructions = "\n\n".join(system_parts)
+        normalized[0]["content"] = f"{instructions}\n\n{normalized[0]['content']}"
+
+    return normalized
+
+
+def _ollama_direct_chat(
+    messages: list,
+    model_cfg: dict,
+    max_tokens: int,
+    temperature: float,
+) -> str:
+    """Call Ollama's native HTTP API for Ollama Cloud."""
+    api_base = (model_cfg.get("api_base") or "https://ollama.com").rstrip("/")
+    api_key = model_cfg.get("api_key")
+    model_name = _strip_ollama_prefix(model_cfg["model"])
+
+    if not api_key or not api_key.strip() or api_key.lower() == "none":
+        raise RuntimeError("Ollama Cloud API key is missing.")
+
+    payload = {
+        "model": model_name,
+        "messages": _normalize_ollama_cloud_messages(messages),
+        "stream": False,
+        "options": {
+            "temperature": temperature,
+            "num_predict": max_tokens,
+        },
+    }
+    req = urllib.request.Request(
+        f"{api_base}/api/chat",
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=120.0) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Ollama Cloud HTTP {e.code}: {detail[:300]}") from e
+
+    content = data.get("message", {}).get("content") or data.get("response")
+    if not content:
+        raise RuntimeError(f"Ollama Cloud returned an empty response: {str(data)[:300]}")
+    return content
 
 
 # ─────────────────────────────────────────────────────────
@@ -444,6 +548,14 @@ Keep it professional and concise like a real operations report."""
             if api_key:
                 kwargs["api_key"] = api_key
 
+            if model_cfg["id"] == "ollama_cloud":
+                return _ollama_direct_chat(
+                    messages=kwargs["messages"],
+                    model_cfg=model_cfg,
+                    max_tokens=kwargs["max_tokens"],
+                    temperature=kwargs["temperature"],
+                )
+
             response = litellm.completion(**kwargs)
             return response.choices[0].message.content
 
@@ -523,6 +635,14 @@ def chat_with_llm(messages: list, model_preference: str = None) -> str:
                 kwargs["api_base"] = api_base
             if api_key:
                 kwargs["api_key"] = api_key
+
+            if model_cfg["id"] == "ollama_cloud":
+                return _ollama_direct_chat(
+                    messages=messages,
+                    model_cfg=model_cfg,
+                    max_tokens=kwargs["max_tokens"],
+                    temperature=kwargs["temperature"],
+                )
 
             response = litellm.completion(**kwargs)
             return response.choices[0].message.content

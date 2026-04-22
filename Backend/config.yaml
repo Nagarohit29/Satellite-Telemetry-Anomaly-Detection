@@ -8,7 +8,7 @@ training:
   window_size: 10
 
 inference:
-  threshold: 0.5
+  threshold: 0.03
   window_size: 10
 
 paths:

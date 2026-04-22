@@ -1,123 +1,29 @@
-version: "3.8"
-
 services:
-  # --- MONOLITHIC SERVICE (All-in-one) ---
-  # Use this for single-image deployment
   satellite-app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: nagarohit/satellite-telemetry-full:latest
-    container_name: satellite_monolith
+    image: satellite-telemetry-anomaly-detection:latest
+    container_name: satellite-telemetry
     restart: unless-stopped
     ports:
-      - "80:80"     # Frontend
-      - "8000:8000" # Middleware
-      - "8001:8001" # Backend
-    volumes:
-      - ./Backend/data:/app/Backend/data
-      - ./Backend/models:/app/Backend/models
-      - ./Backend/results:/app/Backend/results
-      - ./Backend/checkpoints:/app/Backend/checkpoints
-      - .env:/app/.env
-    environment:
-      - DATASET=${DATASET:-SMAP}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    networks:
-      - satellite_net
-
-  # --- MULTI-CONTAINER SERVICES (Split) ---
-  # Use these for scalable or distributed deployment
-  backend:
-    build:
-      context: .
-      dockerfile: Backend/Dockerfile
-    image: nagarohit/satellite-backend:latest
-    container_name: satellite_backend
-    restart: unless-stopped
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./Backend/data:/app/data
-      - ./Backend/models:/app/models
-      - ./Backend/results:/app/results
-      - ./Backend/checkpoints:/app/checkpoints
-    environment:
-      - DATASET=${DATASET:-SMAP}
-      - SERVER_HOST=0.0.0.0
-      - SERVER_PORT=8001
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - satellite_net
-
-  middleware:
-    build:
-      context: .
-      dockerfile: Middleware/Dockerfile
-    image: nagarohit/satellite-middleware:latest
-    container_name: satellite_middleware
-    restart: unless-stopped
-    ports:
+      - "80:80"
       - "8000:8000"
-    volumes:
-      - .env:/app/.env
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OLLAMA_API_BASE=http://ollama:11434
-      - BACKEND_URL=http://backend:8001
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - satellite_net
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Frontend/Dockerfile
-    image: nagarohit/satellite-frontend:latest
-    container_name: satellite_frontend
-    restart: unless-stopped
-    ports:
-      - "3000:80"
-    depends_on:
-      middleware:
-        condition: service_healthy
-    networks:
-      - satellite_net
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: satellite_ollama
-    restart: unless-stopped
-    ports:
+      - "8001:8001"
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+      - ./Backend/data:/app/Backend/data
+      - ./Backend/models:/app/Backend/models
+      - ./Backend/results:/app/Backend/results
+      - .env:/app/.env
+      - ./Middleware/.env:/app/Middleware/.env
+    environment:
+      - DATASET=${DATASET:-SMAP}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
+      - LITELLM_LOG=ERROR
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     deploy:
       resources:
         reservations:
@@ -126,16 +32,15 @@ services:
               count: 1
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1/api/health', timeout=3)\" || exit 1"
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
-    networks:
-      - satellite_net
+      start_period: 120s
 
 volumes:
   ollama_data:
-
-networks:
-  satellite_net:
-    driver: bridge

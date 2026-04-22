@@ -1,33 +1,42 @@
-import { useState, useEffect, useCallback } from "react";
-import { predict } from "../api/endpoints";
-
-const NUM_FEATURES = 25; // SMAP dataset has 25 telemetry features per timestep
-
-const generateDummyData = (length = 200) =>
-  Array.from({ length }, () =>
-    Array.from({ length: NUM_FEATURES }, () =>
-      parseFloat((Math.random() * 2 - 1).toFixed(4))
-    )
-  );
+import { useState, useEffect, useCallback, useRef } from "react";
+import { getTelemetry, predict } from "../api/endpoints";
 
 export const useAnomalyData = (channel = "T-1", pollInterval = 5000, modelPreference = null) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const inFlightRef = useRef(false);
+  const offsetRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
     try {
-      const inputData = generateDummyData(200);
-      const result = await predict(channel, inputData, modelPreference);
-      setData(result);
+      const telemetry = await getTelemetry(channel, offsetRef.current, 200, 50);
+      offsetRef.current = telemetry.next_offset ?? 0;
+
+      const result = await predict(channel, telemetry.data, modelPreference);
+      setData({
+        ...result,
+        telemetrySource: telemetry.source,
+        telemetryLive: telemetry.live,
+        telemetryDataset: telemetry.dataset,
+        telemetryOffset: telemetry.offset,
+        telemetryTotalPoints: telemetry.total_points,
+      });
     } catch (err) {
       setError(err.message || "Failed to fetch anomaly data");
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   }, [channel, modelPreference]);
+
+  useEffect(() => {
+    offsetRef.current = 0;
+  }, [channel]);
 
   useEffect(() => {
     fetchData();

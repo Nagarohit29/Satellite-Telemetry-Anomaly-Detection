@@ -3,10 +3,32 @@ import numpy as np
 import yaml
 import os
 import logging
+import threading
 from src.models import TranAD
 from src.constants import *
 
 logger = logging.getLogger(__name__)
+_MODEL_CACHE = None
+_MODEL_CACHE_LOCK = threading.Lock()
+
+
+def select_inference_device() -> torch.device:
+    """Pick the inference device from env/config with CUDA auto-detection."""
+    requested = os.getenv("INFERENCE_DEVICE", "auto").strip().lower()
+
+    if requested == "cpu":
+        logger.info("Using CPU for inference (INFERENCE_DEVICE=cpu).")
+        return torch.device("cpu")
+
+    if requested in ("auto", "cuda", "gpu"):
+        if torch.cuda.is_available():
+            logger.info("Using CUDA for inference.")
+            return torch.device("cuda")
+        if requested in ("cuda", "gpu"):
+            logger.warning("CUDA was requested for inference but is not available. Falling back to CPU.")
+
+    logger.info("Using CPU for inference.")
+    return torch.device("cpu")
 
 def load_config():
     """Load configuration from config.yaml, checking script directory first."""
@@ -31,11 +53,7 @@ def load_model(config):
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model checkpoint not found at {model_path}. Please train the model first.")
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device.type == "cuda":
-        logger.info(f"✅ CUDA is available. Using device: {torch.cuda.get_device_name(0)}")
-    else:
-        logger.warning("⚠️ CUDA not detected. Falling back to CPU.")
+    device = select_inference_device()
     
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     state_dict = checkpoint.get('model_state_dict', checkpoint)
@@ -62,9 +80,18 @@ def load_model(config):
     model.eval()
     return model, device, expected_feats
 
+def get_cached_model(config):
+    """Load the TranAD checkpoint once per process instead of once per request."""
+    global _MODEL_CACHE
+    if _MODEL_CACHE is None:
+        with _MODEL_CACHE_LOCK:
+            if _MODEL_CACHE is None:
+                _MODEL_CACHE = load_model(config)
+    return _MODEL_CACHE
+
 def run_inference(data: np.ndarray):
     config = load_config()
-    model, device, expected_feats = load_model(config)
+    model, device, expected_feats = get_cached_model(config)
     
     # Ensure input data matches model dimensions
     input_feats = data.shape[1]
@@ -72,14 +99,14 @@ def run_inference(data: np.ndarray):
         logger.warning(f"Adapting input features ({input_feats}) to match model expectation ({expected_feats}). Results may be unreliable.")
         if input_feats < expected_feats:
             # Pad with zeros
-            padding = np.zeros((data.shape[0], expected_feats - input_feats))
+            padding = np.zeros((data.shape[0], expected_feats - input_feats), dtype=data.dtype)
             data = np.hstack([data, padding])
         else:
             # Truncate
             data = data[:, :expected_feats]
     
     window_size = config["inference"]["window_size"]
-    threshold = config["inference"]["threshold"]
+    threshold = float(os.getenv("INFERENCE_THRESHOLD", config["inference"]["threshold"]))
 
     tensor = torch.FloatTensor(data).to(device)
 
