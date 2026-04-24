@@ -94,16 +94,42 @@ Notes for Docker Hub users:
 - The Ollama models themselves are persisted to a named volume (`ollama_data`) so you don't have to re-download massive AI models on a fresh run.
 
 ### Local Development Setup
-1. Create and activate a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Start the services individually (Backend on 8001, Middleware on 8000, Frontend on 3000).
+
+If you prefer to run the system natively without Docker, you will need to start the three core components (Backend, Middleware, and Frontend) individually.
+
+#### 1. Setup Python Environment
+```bash
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
+
+# Install all Python dependencies
+pip install -r requirements.txt
+```
+
+#### 2. Start the ML Backend (Port 8001)
+Open a new terminal, activate your virtual environment, and run:
+```bash
+cd Backend
+python serve.py
+```
+
+#### 3. Start the API Middleware (Port 8000)
+Open a second terminal, activate your virtual environment, and run:
+```bash
+cd Middleware
+python main.py
+```
+
+#### 4. Setup and Start the Frontend (Port 5173)
+Open a third terminal, install Node.js dependencies, and start Vite:
+```bash
+cd Frontend
+npm install
+npm run dev
+```
+
+The React application will be available at `http://localhost:5173`.
 
 ## ⚙️ Configuration
 
