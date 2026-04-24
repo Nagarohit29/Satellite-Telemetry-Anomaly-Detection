@@ -54,7 +54,7 @@ RUN printf '%s\n' \
     '' \
     '# Ollama Local (set by docker-compose env or override)' \
     'OLLAMA_API_BASE=http://ollama:11434' \
-    'OLLAMA_MODEL=llama3' \
+    'OLLAMA_MODEL=llama3.2' \
     '' \
     '# Backend Service' \
     'BACKEND_URL=http://backend:8001' \

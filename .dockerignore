@@ -23,19 +23,28 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .npm/
+Frontend/*
+!Frontend/dist/
+!Frontend/dist/**
+!Frontend/nginx.monolith.conf
 
 # Build artifacts
 dist/
 build/
 .next/
 out/
+!Frontend/dist/
+!Frontend/dist/**
 
 # Data and Models. Keep large datasets/results out of the image, but include
-# the trained checkpoint needed for zero-config inference.
-Backend/data/train/
-Backend/data/test/
+# only the replay dataset and checkpoint needed for zero-config inference.
+Backend/data/*
+!Backend/data/SMAP_MSL/
+!Backend/data/SMAP_MSL/**
 Backend/models/
 Backend/results/
+Backend/processed/
+Backend/plots/
 Backend/checkpoints/
 !Backend/checkpoints/
 !Backend/checkpoints/TranAD_SMAP/

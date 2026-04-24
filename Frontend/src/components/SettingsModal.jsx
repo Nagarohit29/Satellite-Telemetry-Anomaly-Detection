@@ -37,7 +37,7 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
         localStorage.removeItem('selectedModel');
       }
       
-      // Don't auto-select — let user choose (or leave empty for auto fallback)
+      // Don't auto-select - let user choose (or leave empty for auto fallback)
     } catch (err) {
       setError(err.message);
     } finally {
@@ -58,10 +58,10 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
     try {
       setIsSaving(true);
       setSaveStatus(null);
-      await updateAPIKey(provider, key, false);
+      await updateAPIKey(provider, key, true);
       setEditingProvider(null);
       setApiKeyInput('');
-      setSaveStatus({ type: 'success', msg: `${provider} key loaded for this session only.` });
+      setSaveStatus({ type: 'success', msg: `${provider} key saved securely.` });
       await fetchModels(); // Refresh to show new status
     } catch (err) {
       setSaveStatus({ type: 'error', msg: err.message || 'Failed to save key' });
@@ -99,8 +99,9 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
 
   // Get the proper status text for a model
   const getStatusText = (model) => {
-    if (selectedModel === model.id && model.available) return 'CURRENTLY ACTIVE';
-    if (model.available) return 'AVAILABLE — CLICK TO SELECT';
+    if (selectedModel === model.id && model.available && model.ready !== false) return 'CURRENTLY ACTIVE';
+    if (model.status_text) return model.status_text;
+    if (model.available) return 'AVAILABLE - CLICK TO SELECT';
     if (model.type === 'device') return 'SERVER NOT RUNNING';
     return 'MISSING API KEY';
   };
@@ -173,7 +174,7 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
               gap: 8,
             }}>
               <span style={{ fontSize: '14px' }}>⚡</span>
-              <span><strong>Auto Fallback</strong> — System defaults to Local Ollama. Select a cloud model to override.</span>
+              <span><strong>Auto Fallback</strong> - System defaults to Local Ollama. Select a cloud model to override.</span>
             </div>
           )}
 
@@ -192,7 +193,7 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
             </div>
           ) : (
             <div className="model-list">
-              {/* ── DEVICE / LOCAL MODELS ── */}
+              {/* DEVICE / LOCAL MODELS */}
               {deviceModels.length > 0 && (
                 <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Monitor size={10} /> Device
@@ -224,7 +225,7 @@ const SettingsModal = ({ isOpen, onClose, selectedModel, setSelectedModel }) => 
                 </div>
               ))}
 
-              {/* ── CLOUD MODELS ── */}
+              {/* CLOUD MODELS */}
               {cloudModels.length > 0 && (
                 <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Cloud size={10} /> Cloud API

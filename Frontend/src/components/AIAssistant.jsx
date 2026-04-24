@@ -5,7 +5,7 @@ import { sendChatMessage } from "../api/endpoints";
 export default function AIAssistant({ selectedModel }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "NASA STAD AI Assistant online. How can I help you analyze telemetry anomalies today?" }
+    { role: "assistant", content: "STAD AI Assistant online. How can I help you analyze telemetry anomalies today?" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);

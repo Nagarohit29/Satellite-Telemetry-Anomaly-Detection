@@ -7,13 +7,12 @@ from dotenv import load_dotenv
 # Force reload environment variables (checks project root .env for Web UI overrides)
 def reload_env(path=None):
     """Dynamically reload environment variables from the project env files."""
-    docker_env = "/app/.env"
-    middleware_docker_env = "/app/Middleware/.env"
+    config_env = "/app/config/.env"
     root_env = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
     middleware_env = os.path.join(os.path.dirname(__file__), '.env')
     
     # Load in order so more specific files can override defaults.
-    targets = [target for target in [path, docker_env, root_env, middleware_docker_env, middleware_env] if target]
+    targets = [target for target in [path, config_env, root_env, middleware_env] if target]
     loaded = set()
     for target in targets:
         if target in loaded:

@@ -27,7 +27,7 @@ async def chat(req: ChatRequest):
         
         system_msg = {
             "role": "system",
-            "content": "You are a NASA spacecraft telemetry AI assistant. You help engineers understand anomaly detection data, charts, and system status. Provide concise, highly professional responses."
+            "content": "You are a spacecraft telemetry AI assistant. You help engineers understand anomaly detection data, charts, and system status. Provide concise, highly professional responses."
         }
         
         if req.context:

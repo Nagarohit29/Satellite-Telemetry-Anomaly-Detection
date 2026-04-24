@@ -182,6 +182,11 @@ def infer(req: InferRequest):
 
 @app.post("/train")
 def train(req: TrainRequest):
+    if os.getenv("ENABLE_TRAINING", "false").strip().lower() not in {"1", "true", "yes", "on"}:
+        raise HTTPException(
+            status_code=501,
+            detail="Training is disabled in this runtime image. Use the development environment to retrain models.",
+        )
     try:
         from train import train as run_train
         # Pass dataset and epochs parameters to training function

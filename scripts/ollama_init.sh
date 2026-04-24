@@ -1,13 +1,13 @@
 #!/bin/bash
 # ─────────────────────────────────────────────
 # Ollama Init — starts the server and ensures
-# llama3 is available (pulled if missing).
+# llama3.2 is available (pulled if missing).
 # Used by the docker-compose `ollama` service.
 # ─────────────────────────────────────────────
 set -e
 
 # Model to ensure is available (matches OLLAMA_MODEL default)
-MODEL="${OLLAMA_MODEL:-llama3}"
+MODEL="${OLLAMA_MODEL:-llama3.2}"
 
 echo "🤖 Starting Ollama server..."
 ollama serve &

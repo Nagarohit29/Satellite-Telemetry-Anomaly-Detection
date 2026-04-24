@@ -20,7 +20,7 @@ services:
       - ./Middleware/.env:/app/Middleware/.env
     environment:
       - DATASET=${DATASET:-SMAP}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
       - LITELLM_LOG=ERROR
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
