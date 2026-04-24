@@ -55,16 +55,34 @@ Located in [`/Frontend`](./Frontend), a modern web interface for operators.
 If you do not want to clone the repository, you can pull and run the published
 single-container image directly from Docker Hub.
 
-1. Pull the image:
-   ```bash
-   docker pull <your-dockerhub-username>/satellite-telemetry-anomaly-detection:latest
-   ```
-2. Run the container:
-   ```bash
-   docker run --gpus all --name satellite-telemetry \
-     -p 80:80 -p 8000:8000 -p 8001:8001 -p 11434:11434 \
-     <your-dockerhub-username>/satellite-telemetry-anomaly-detection:latest
-   ```
+#### Option 1: Run with NVIDIA GPU (Recommended)
+*Requires an NVIDIA GPU and the NVIDIA Container Toolkit.*
+
+```bash
+docker run --gpus all \
+  --name satellite-telemetry \
+  -p 80:80 \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  -p 11434:11434 \
+  -v ollama_data:/root/.ollama \
+  -d nagarohit/satellite-telemetry-anomaly-detection:1.0
+```
+
+#### Option 2: Run with CPU Only
+*Use this command if you are running on a standard laptop, Mac, or a server without an NVIDIA GPU. Deep learning inference will automatically fall back to CPU processing.*
+
+```bash
+docker run \
+  --name satellite-telemetry \
+  -p 80:80 \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  -p 11434:11434 \
+  -v ollama_data:/root/.ollama \
+  -d nagarohit/satellite-telemetry-anomaly-detection:1.0
+```
+
 3. Open the application:
    - Frontend: `http://localhost`
    - Middleware API: `http://localhost:8000`
@@ -72,10 +90,8 @@ single-container image directly from Docker Hub.
    - Ollama API: `http://localhost:11434`
 
 Notes for Docker Hub users:
-- The dashboard currently replays recorded SMAP telemetry data bundled with the image.
-- Ollama Cloud keys are session-only by default and are not written to `.env`
-  unless you explicitly change that behavior in the app.
-- NVIDIA Container Toolkit is required for GPU access with `--gpus all`.
+- By default, all configurations and API keys entered via the Web UI are stored ephemerally within the container. They will persist if the container is stopped and restarted, but will be securely destroyed if the container is removed (`docker rm`).
+- The Ollama models themselves are persisted to a named volume (`ollama_data`) so you don't have to re-download massive AI models on a fresh run.
 
 ### Local Development Setup
 1. Create and activate a virtual environment:

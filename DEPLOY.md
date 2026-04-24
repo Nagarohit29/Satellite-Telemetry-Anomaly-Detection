@@ -34,18 +34,39 @@ The first run may take several minutes because Ollama downloads `llama3`. The `o
 
 ## Direct Docker Run
 
-After building the image:
+After building or pulling the image from Docker Hub, use one of the following commands:
+
+### Option 1: Run with NVIDIA GPU (Recommended)
+*Requires an NVIDIA GPU and the NVIDIA Container Toolkit.*
 
 ```bash
-docker build -t satellite-telemetry-anomaly-detection:latest .
-docker run --gpus all --name satellite-telemetry -p 80:80 -p 8000:8000 -p 8001:8001 -p 11434:11434 -v satellite_ollama:/root/.ollama satellite-telemetry-anomaly-detection:latest
+docker run --gpus all \
+  --name satellite-telemetry \
+  -p 80:80 \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  -p 11434:11434 \
+  -v ollama_data:/root/.ollama \
+  -d nagarohit/satellite-telemetry-anomaly-detection:1.0
 ```
 
-If you do not have NVIDIA GPU support, remove `--gpus all`. Inference still runs on CPU.
+### Option 2: Run with CPU Only
+*Deep learning inference will automatically fall back to CPU processing.*
+
+```bash
+docker run \
+  --name satellite-telemetry \
+  -p 80:80 \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  -p 11434:11434 \
+  -v ollama_data:/root/.ollama \
+  -d nagarohit/satellite-telemetry-anomaly-detection:1.0
+```
 
 ## API Keys
 
-You can add API keys from the Settings UI. With Compose, `.env` and `Middleware/.env` are mounted into the container so saved keys persist across restarts.
+You can add API keys from the Settings UI. Configurations and keys are stored ephemerally within the container. They will persist if the container is stopped and restarted, but will be securely destroyed if the container is removed (`docker rm`). The Ollama models themselves are persisted to a named volume (`ollama_data`) so you don't have to re-download massive AI models on a fresh run.
 
 ## Split Deployment
 
