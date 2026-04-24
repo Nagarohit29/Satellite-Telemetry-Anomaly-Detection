@@ -14,7 +14,7 @@ def _get_env_paths() -> list:
     Priority order: Docker /app/.env, project root .env, middleware local .env
     """
     paths = []
-    docker_env = "/app/.env"
+    docker_env = "/app/config/.env"
     root_env = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
     middleware_env = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
 

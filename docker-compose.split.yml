@@ -52,7 +52,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
       - OLLAMA_API_BASE=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
       - BACKEND_URL=http://backend:8001
       - LITELLM_LOG=ERROR
     depends_on:
@@ -93,7 +93,7 @@ services:
       - ollama_data:/root/.ollama
       - ./scripts/ollama_init.sh:/app/ollama_init.sh
     environment:
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     entrypoint: ["/bin/bash", "/app/ollama_init.sh"]
@@ -105,7 +105,7 @@ services:
               count: 1
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags | grep -q '${OLLAMA_MODEL:-llama3}'"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags | grep -q '${OLLAMA_MODEL:-llama3.2}'"]
       interval: 30s
       timeout: 15s
       retries: 10

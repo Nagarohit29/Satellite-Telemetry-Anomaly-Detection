@@ -26,6 +26,7 @@ Frontend/.vite/
 # Docker
 *.rar
 *.zip
+docker/wheels/
 
 # VS Code
 .vscode/

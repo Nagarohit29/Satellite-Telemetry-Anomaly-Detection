@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Satellite Telemetry - one-image startup.
@@ -19,7 +19,7 @@ ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 OPENAI_API_KEY=
 OLLAMA_API_BASE=http://127.0.0.1:11434
-OLLAMA_MODEL=llama3
+OLLAMA_MODEL=llama3.2
 BACKEND_URL=http://127.0.0.1:8001
 DATASET=SMAP
 WINDOW_SIZE=100
@@ -38,7 +38,7 @@ fi
 set -a
 sed 's/\r$//' /app/.env > /tmp/.env_clean
 # shellcheck source=/dev/null
-source /tmp/.env_clean
+. /tmp/.env_clean
 set +a
 
 http_ok() {
@@ -60,7 +60,7 @@ until http_ok "http://127.0.0.1:11434/api/tags"; do
     sleep 2
 done
 
-MODEL="${OLLAMA_MODEL:-llama3}"
+MODEL="${OLLAMA_MODEL:-llama3.2}"
 if ! ollama list 2>/dev/null | grep -q "^${MODEL}"; then
     echo "Pulling Ollama model: ${MODEL}. This runs once when /root/.ollama is cached."
     if ! ollama pull "${MODEL}"; then

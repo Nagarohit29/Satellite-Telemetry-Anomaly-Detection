@@ -106,7 +106,7 @@ THRESHOLD=0.2
 BACKEND_URL=http://localhost:8001
 
 # Ollama (Optional for local AI)
-OLLAMA_MODEL=llama3
+OLLAMA_MODEL=llama3.2
 ```
 
 ## 📜 Attribution & License
