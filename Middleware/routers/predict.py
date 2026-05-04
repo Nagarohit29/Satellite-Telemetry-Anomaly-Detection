@@ -101,7 +101,8 @@ async def predict(req: PredictRequest):
             threshold=threshold,
             anomaly_count=anomaly_count,
             total_windows=total_windows,
-            device=device
+            device=device,
+            inference_engine=result.get("inference_engine")
         )
 
     except Exception as e:

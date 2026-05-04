@@ -11,7 +11,6 @@ export default function Dashboard({ selectedModel }) {
 
   return (
     <div style={{ color: "#fff", display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40 }}>
-      {/* Header Controls */}
       <div className="glass-panel" style={{ padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <LayoutDashboard size={20} color="var(--primary)" />
@@ -24,15 +23,10 @@ export default function Dashboard({ selectedModel }) {
             )}
           </div>
         </div>
-        
+
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <ChannelSelector value={channel} onChange={setChannel} />
-          <button 
-            onClick={refetch} 
-            disabled={loading} 
-            className="btn btn-primary"
-            style={{ width: 100, justifyContent: "center" }}
-          >
+          <button onClick={refetch} disabled={loading} className="btn btn-primary" style={{ width: 100, justifyContent: "center" }}>
             {loading ? <RefreshCw size={16} className="animate-pulse" style={{ animation: "spin 1s linear infinite" }} /> : "Refresh"}
           </button>
         </div>
@@ -47,7 +41,6 @@ export default function Dashboard({ selectedModel }) {
 
       {data && (
         <>
-          {/* Key Metrics Row */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 24 }}>
             {[
               { label: "Total Windows", value: data.total_windows, icon: Activity, color: "var(--text-main)" },
@@ -62,30 +55,22 @@ export default function Dashboard({ selectedModel }) {
                   </div>
                   <m.icon size={16} color={m.color} style={{ opacity: 0.8 }} />
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 600, color: m.color, fontFamily: "var(--font-mono)" }}>
-                  {m.value}
-                </div>
+                <div style={{ fontSize: 28, fontWeight: 600, color: m.color, fontFamily: "var(--font-mono)" }}>{m.value}</div>
               </div>
             ))}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24 }}>
-            {/* Chart */}
             <div className="glass-panel" style={{ padding: 24 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
                 <Activity size={18} color="var(--primary)" />
-                <h3 style={{ margin: 0, fontSize: 15 }}>Anomaly Score Timeseries — {channel}</h3>
+                <h3 style={{ margin: 0, fontSize: 15 }}>Anomaly Score Timeseries - {channel}</h3>
               </div>
               <div style={{ height: 320 }}>
-                <AnomalyChart
-                  scores={data.scores}
-                  threshold={data.threshold}
-                  channel={channel}
-                />
+                <AnomalyChart scores={data.scores} threshold={data.threshold} channel={channel} />
               </div>
             </div>
 
-            {/* Heatmap */}
             <div className="glass-panel" style={{ padding: 24 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
                 <LayoutDashboard size={18} color="var(--primary)" />

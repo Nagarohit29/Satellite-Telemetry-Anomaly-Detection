@@ -19,6 +19,7 @@ class PredictResponse(BaseModel):
     anomaly_count: int
     total_windows: int
     device: str
+    inference_engine: Optional[str] = None
 
 class AlertResponse(BaseModel):
     id: str

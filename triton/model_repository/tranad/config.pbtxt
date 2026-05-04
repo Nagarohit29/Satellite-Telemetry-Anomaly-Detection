@@ -1,0 +1,31 @@
+name: "tranad"
+platform: "pytorch_libtorch"
+max_batch_size: 0
+
+input [
+  {
+    name: "DATA"
+    data_type: TYPE_FP32
+    dims: [ -1, 25 ]
+  }
+]
+
+output [
+  {
+    name: "SCORES"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_AUTO
+  }
+]
+
+parameters: {
+  key: "DISABLE_OPTIMIZED_EXECUTION"
+  value: { string_value: "true" }
+}

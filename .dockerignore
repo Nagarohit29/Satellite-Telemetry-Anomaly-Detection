@@ -27,6 +27,7 @@ Frontend/*
 !Frontend/dist/
 !Frontend/dist/**
 !Frontend/nginx.monolith.conf
+!Frontend/nginx.conf
 
 # Build artifacts
 dist/
@@ -59,6 +60,8 @@ Backend/plots/
 # OS files
 .DS_Store
 Thumbs.db
+.codex_tmp/
+docs/
 
 # Docker files (not needed in build context)
 docker-compose*

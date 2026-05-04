@@ -36,3 +36,4 @@ docker/wheels/
 env/
 __pycache__/
 *.pyc
+.codex_tmp/

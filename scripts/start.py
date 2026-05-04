@@ -13,6 +13,8 @@ CONFIG_DIR = APP_ROOT / "config"
 ENV_FILE = CONFIG_DIR / ".env"
 OLLAMA_HEALTH_URL = "http://127.0.0.1:11434/api/tags"
 BACKEND_HEALTH_URL = "http://127.0.0.1:8001/health"
+TRITON_HEALTH_URL = "http://127.0.0.1:8008/v2/health/ready"
+TRITON_MODEL_HEALTH_URL = "http://127.0.0.1:8008/v2/models/tranad/ready"
 PROCESSES = []
 
 
@@ -34,12 +36,18 @@ def ensure_env_files() -> None:
                     "OLLAMA_API_BASE=http://127.0.0.1:11434",
                     "OLLAMA_MODEL=llama3.2",
                     "OLLAMA_PREFETCH_MODEL=true",
+                    "OLLAMA_PULL_RETRIES=5",
+                    "OLLAMA_PULL_RETRY_DELAY=10",
                     "OLLAMA_CLOUD_URL=",
                     "BACKEND_URL=http://127.0.0.1:8001",
                     "DATASET=SMAP",
                     "WINDOW_SIZE=100",
                     "THRESHOLD=0.03",
                     "INFERENCE_THRESHOLD=0.03",
+                    "TRITON_URL=http://127.0.0.1:8008",
+                    "TRITON_MODEL_NAME=tranad",
+                    "TRITON_METRICS_URL=http://127.0.0.1:8010/metrics",
+                    "TRITON_EXPORT_MANIFEST=/models/tranad/export_manifest.json",
                     "SERVER_HOST=0.0.0.0",
                     "SERVER_PORT=8001",
                     "",
@@ -97,6 +105,27 @@ def wait_for(url: str, label: str, retries: int = 60, delay: float = 2.0) -> Non
     raise RuntimeError(f"{label} failed to become healthy.")
 
 
+def _ollama_model_cached(model: str) -> bool:
+    result = subprocess.run(
+        ["ollama", "list"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=os.environ.copy(),
+    )
+    if result.returncode != 0:
+        return False
+
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("NAME "):
+            continue
+        name = stripped.split()[0]
+        if name == model or name.startswith(f"{model}:"):
+            return True
+    return False
+
+
 def maybe_pull_ollama_model(model: str) -> None:
     prefetch_enabled = os.getenv("OLLAMA_PREFETCH_MODEL", "true").strip().lower() in {
         "1",
@@ -108,21 +137,29 @@ def maybe_pull_ollama_model(model: str) -> None:
         log("Skipping Ollama model prefetch (OLLAMA_PREFETCH_MODEL=false).")
         return
 
-    result = subprocess.run(
-        ["ollama", "list"],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=os.environ.copy(),
-    )
-    if result.returncode == 0 and any(line.startswith(model) for line in result.stdout.splitlines()):
+    if _ollama_model_cached(model):
         log(f"Ollama model already cached: {model}")
         return
 
-    log(f"Pulling Ollama model: {model}. This runs once when /root/.ollama is cached.")
-    pull_result = subprocess.run(["ollama", "pull", model], check=False, env=os.environ.copy())
-    if pull_result.returncode != 0:
-        log(f"Warning: failed to pull {model}. Chat will still work with cloud keys if configured.")
+    retries = max(1, int(os.getenv("OLLAMA_PULL_RETRIES", "5")))
+    retry_delay = max(1.0, float(os.getenv("OLLAMA_PULL_RETRY_DELAY", "10")))
+
+    for attempt in range(1, retries + 1):
+        log(f"Pulling Ollama model: {model} (attempt {attempt}/{retries}).")
+        pull_result = subprocess.run(["ollama", "pull", model], check=False, env=os.environ.copy())
+        if pull_result.returncode == 0 and _ollama_model_cached(model):
+            log(f"Ollama model ready: {model}")
+            return
+
+        if attempt < retries:
+            delay = retry_delay * attempt
+            log(f"Ollama pull attempt {attempt} failed. Retrying in {delay:.0f}s...")
+            time.sleep(delay)
+
+    raise RuntimeError(
+        f"Failed to pull required Ollama model '{model}' after {retries} attempts. "
+        "The container will exit so Docker can retry or surface the startup failure."
+    )
 
 
 def main() -> int:
@@ -132,6 +169,25 @@ def main() -> int:
     atexit.register(cleanup)
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
+
+    log("Starting Triton inference server...")
+    triton_env = os.environ.copy()
+    start_process(
+        [
+            "tritonserver",
+            "--model-repository=/models",
+            "--disable-auto-complete-config",
+            "--http-port=8008",
+            "--grpc-port=8009",
+            "--metrics-port=8010",
+        ],
+        env=triton_env,
+        name="triton",
+    )
+
+    log("Waiting for Triton...")
+    wait_for(TRITON_HEALTH_URL, "Triton")
+    wait_for(TRITON_MODEL_HEALTH_URL, "Triton model")
 
     log("Starting Ollama...")
     ollama_env = os.environ.copy()
@@ -160,6 +216,7 @@ def main() -> int:
     log("Middleware: http://localhost:8000")
     log("Backend:    http://localhost:8001")
     log("Ollama:     http://localhost:11434")
+    log("Triton:     http://localhost:8008")
 
     while True:
         for name, proc in PROCESSES:

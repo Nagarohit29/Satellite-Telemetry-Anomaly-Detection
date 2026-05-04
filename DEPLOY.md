@@ -30,7 +30,7 @@ Open:
 - Backend API: http://localhost:8001/docs
 - Ollama API: http://localhost:11434
 
-The first run may take several minutes because Ollama downloads `llama3`. The `ollama_data` Docker volume keeps that model cached for later runs.
+On first run, the same monolithic container pulls `llama3.2` into the named `ollama_data` volume, matching the earlier `1.0` behavior. Later restarts reuse that cached model instead of downloading it again. Startup can still take several minutes while the model pull completes, Triton becomes healthy, and the rest of the stack comes online. On the GPU path, the first local Ollama request may spend extra time loading the model into VRAM.
 
 ## Direct Docker Run
 
@@ -46,8 +46,9 @@ docker run --gpus all \
   -p 8000:8000 \
   -p 8001:8001 \
   -p 11434:11434 \
+  -p 8008:8008 \
   -v ollama_data:/root/.ollama \
-  -d nagarohit/satellite-telemetry-anomaly-detection:1.0
+  -d nagarohit/satellite-telemetry-anomaly-detection:2.0
 ```
 
 ### Option 2: Run with CPU Only
@@ -60,8 +61,9 @@ docker run \
   -p 8000:8000 \
   -p 8001:8001 \
   -p 11434:11434 \
+  -p 8008:8008 \
   -v ollama_data:/root/.ollama \
-  -d nagarohit/satellite-telemetry-anomaly-detection:1.0
+  -d nagarohit/satellite-telemetry-anomaly-detection:2.0
 ```
 
 ## API Keys

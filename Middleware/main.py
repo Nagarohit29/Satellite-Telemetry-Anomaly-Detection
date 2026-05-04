@@ -46,7 +46,7 @@ def validate_env_vars():
     if not os.getenv("BACKEND_URL"):
         print("INFO: BACKEND_URL not set, using default: http://localhost:8001")
 
-app = FastAPI(title="Satellite Telemetry Middleware", version="1.0.0")
+app = FastAPI(title="Satellite Telemetry Middleware", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,

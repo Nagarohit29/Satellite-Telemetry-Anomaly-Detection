@@ -1,34 +1,35 @@
 #!/bin/bash
-# ─────────────────────────────────────────────
-# Ollama Init — starts the server and ensures
-# llama3.2 is available (pulled if missing).
-# Used by the docker-compose `ollama` service.
-# ─────────────────────────────────────────────
-set -e
+set -euo pipefail
 
-# Model to ensure is available (matches OLLAMA_MODEL default)
 MODEL="${OLLAMA_MODEL:-llama3.2}"
 
-echo "🤖 Starting Ollama server..."
+echo "Starting Ollama server..."
 ollama serve &
 OLLAMA_PID=$!
 
-echo "⏳ Waiting for Ollama API to be ready..."
-until curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; do
-    sleep 2
-done
-echo "✅ Ollama API is up!"
+cleanup() {
+  if kill -0 "${OLLAMA_PID}" 2>/dev/null; then
+    kill "${OLLAMA_PID}" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
 
-# Pull the model only if it isn't already cached in the volume
+echo "Waiting for Ollama API..."
+for _ in $(seq 1 60); do
+  if ollama list >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+
 if ! ollama list 2>/dev/null | grep -q "^${MODEL}"; then
-    echo "📥 Pulling model: ${MODEL} (this runs once — cached in ollama_data volume)"
-    ollama pull "${MODEL}"
-    echo "✅ ${MODEL} ready!"
+  echo "Pulling Ollama model: ${MODEL}"
+  if ! ollama pull "${MODEL}"; then
+    echo "Warning: failed to pull ${MODEL}"
+  fi
 else
-    echo "✅ ${MODEL} already cached — skipping pull"
+  echo "Ollama model already cached: ${MODEL}"
 fi
 
-echo "🤖 Ollama ready — serving ${MODEL} on :11434"
-
-# Hand off to the Ollama server process
-wait $OLLAMA_PID
+echo "Ollama ready on :11434"
+wait "${OLLAMA_PID}"

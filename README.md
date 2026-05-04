@@ -65,8 +65,9 @@ docker run --gpus all \
   -p 8000:8000 \
   -p 8001:8001 \
   -p 11434:11434 \
+  -p 8008:8008 \
   -v ollama_data:/root/.ollama \
-  -d nagarohit/satellite-telemetry-anomaly-detection:1.0
+  -d nagarohit/satellite-telemetry-anomaly-detection:2.0
 ```
 
 #### Option 2: Run with CPU Only
@@ -79,8 +80,9 @@ docker run \
   -p 8000:8000 \
   -p 8001:8001 \
   -p 11434:11434 \
+  -p 8008:8008 \
   -v ollama_data:/root/.ollama \
-  -d nagarohit/satellite-telemetry-anomaly-detection:1.0
+  -d nagarohit/satellite-telemetry-anomaly-detection:2.0
 ```
 
 3. Open the application:
@@ -88,10 +90,12 @@ docker run \
    - Middleware API: `http://localhost:8000`
    - Backend API: `http://localhost:8001`
    - Ollama API: `http://localhost:11434`
+   - Triton API: `http://localhost:8008`
 
 Notes for Docker Hub users:
 - By default, all configurations and API keys entered via the Web UI are stored ephemerally within the container. They will persist if the container is stopped and restarted, but will be securely destroyed if the container is removed (`docker rm`).
-- The Ollama models themselves are persisted to a named volume (`ollama_data`) so you don't have to re-download massive AI models on a fresh run.
+- On the first run, the same container pulls `llama3.2` into the named volume (`ollama_data`) just like the earlier `1.0` workflow. Later restarts reuse the cached model instead of downloading it again.
+- The first container startup can take several minutes because the model pull, Triton startup, and health checks all need to finish before the stack is marked ready. On the GPU path, the first local Ollama chat request may spend additional time loading the model into VRAM before responses become instant on later requests.
 
 ### Local Development Setup
 

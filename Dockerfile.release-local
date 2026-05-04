@@ -1,0 +1,8 @@
+FROM nagarohit/satellite-telemetry-anomaly-detection:2.0-candidate2
+
+ENV OLLAMA_MODELS=/root/.ollama/models
+
+COPY scripts/start.py /app/start.py
+
+ENTRYPOINT []
+CMD ["python3", "/app/start.py"]
