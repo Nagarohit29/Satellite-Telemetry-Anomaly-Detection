@@ -1,0 +1,28 @@
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="Satellite Telemetry Anomaly Detection Team"
+LABEL version="2.0"
+LABEL description="AI orchestration middleware for STAD-AI Version 2"
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    LITELLM_LOG=ERROR
+
+WORKDIR /app
+
+COPY docker/wheels /tmp/wheels
+COPY docker/middleware-requirements.txt /tmp/middleware-requirements.txt
+RUN python -m pip install --no-index --find-links /tmp/wheels -r /tmp/middleware-requirements.txt && \
+    rm -rf /tmp/wheels
+
+COPY Middleware/ ./Middleware/
+
+RUN python -c "from pathlib import Path; Path('/app/config').mkdir(parents=True, exist_ok=True); Path('/app/config/.env').write_text('OLLAMA_API_BASE=http://ollama:11434\nOLLAMA_MODEL=llama3.2:1b\nBACKEND_URL=http://backend:8001\n', encoding='utf-8')"
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)" || exit 1
+
+CMD ["python", "Middleware/main.py"]

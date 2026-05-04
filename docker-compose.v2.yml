@@ -1,0 +1,152 @@
+name: stad-v2
+
+services:
+  triton:
+    build:
+      context: .
+      dockerfile: Dockerfile.triton.v2
+    image: nagarohit/stad-ai-triton:v2
+    container_name: stad_triton_v2
+    restart: unless-stopped
+    shm_size: "1g"
+    ports:
+      - "8008:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v2/health/ready', timeout=3); urllib.request.urlopen('http://127.0.0.1:8000/v2/models/tranad/ready', timeout=3)\" || exit 1"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - stad_v2_net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Backend/Dockerfile.v2
+    image: nagarohit/stad-ai-backend:v2
+    container_name: stad_backend_v2
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./Backend/data:/app/Backend/data
+      - ./Backend/checkpoints:/app/Backend/checkpoints
+    environment:
+      - DATASET=${DATASET:-SMAP}
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8001
+      - INFERENCE_THRESHOLD=${INFERENCE_THRESHOLD:-0.03}
+      - TRITON_URL=http://triton:8000
+      - TRITON_MODEL_NAME=tranad
+    depends_on:
+      triton:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\" || exit 1"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - stad_v2_net
+
+  middleware:
+    build:
+      context: .
+      dockerfile: Middleware/Dockerfile.v2
+    image: nagarohit/stad-ai-middleware:v2
+    container_name: stad_middleware_v2
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config
+      - ./Middleware/.env:/app/Middleware/.env
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+      - OLLAMA_API_BASE=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+      - BACKEND_URL=http://backend:8001
+      - LITELLM_LOG=ERROR
+    depends_on:
+      backend:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\" || exit 1"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - stad_v2_net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Frontend/Dockerfile.v2
+    image: nagarohit/stad-ai-frontend:v2
+    container_name: stad_frontend_v2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      middleware:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1', timeout=3)\" || exit 1"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - stad_v2_net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: stad_ollama_v2
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./scripts/ollama_init.sh:/app/ollama_init.sh
+    environment:
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+    entrypoint: ["/bin/bash", "/app/ollama_init.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags | grep -q '${OLLAMA_MODEL:-llama3.2}'"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 120s
+    networks:
+      - stad_v2_net
+
+volumes:
+  ollama_data:
+
+networks:
+  stad_v2_net:
+    driver: bridge

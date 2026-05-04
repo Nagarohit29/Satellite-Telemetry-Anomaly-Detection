@@ -1,0 +1,6 @@
+{
+  "model_path": "C:\\Naga\\projects\\SatelliteTelemetryAnomalyDetection\\triton\\model_repository\\tranad\\1\\model.pt",
+  "expected_feats": 25,
+  "window_size": 10,
+  "threshold": 0.03
+}
