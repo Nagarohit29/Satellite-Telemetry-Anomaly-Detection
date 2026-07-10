@@ -1,6 +1,7 @@
 # Git
 .git
 .gitignore
+.github
 
 # Python
 __pycache__/
@@ -10,24 +11,32 @@ __pycache__/
 venv/
 ENV/
 env/
+*.egg-info/
 
-# .env files — NEVER bake real API keys into the image.
-# The Dockerfiles create seed .env files via RUN printf commands.
-# docker-compose mounts the real .env at runtime: - .env:/app/.env
+# Environment files — NEVER bake real API keys into images
 .env
 Middleware/.env
+config/.env
+secrets/
 
-# Node.js
+# Node.js (Frontend built in multi-stage, exclude source)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
-.npm/
-Frontend/*
+Frontend/node_modules/
+Frontend/src/
+Frontend/public/
+Frontend/package*.json
+Frontend/vite.config.js
+Frontend/index.html
+Frontend/.eslintrc*
+Frontend/README*
 !Frontend/dist/
 !Frontend/dist/**
 !Frontend/nginx.monolith.conf
 !Frontend/nginx.conf
+!Frontend/nginx.hf.conf
+!Frontend/Dockerfile*
 
 # Build artifacts
 dist/
@@ -37,32 +46,41 @@ out/
 !Frontend/dist/
 !Frontend/dist/**
 
-# Data and Models. Keep large datasets/results out of the image, but include
-# only the replay dataset and checkpoint needed for zero-config inference.
+# Data — exclude everything except needed replay data
 Backend/data/*
 !Backend/data/SMAP_MSL/
 !Backend/data/SMAP_MSL/**
+Backend/data/SMAP_MSL/recordings/
 Backend/models/
 Backend/results/
 Backend/processed/
 Backend/plots/
-Backend/checkpoints/
-!Backend/checkpoints/
+Backend/checkpoints/*
 !Backend/checkpoints/TranAD_SMAP/
 !Backend/checkpoints/TranAD_SMAP/model.ckpt
 
-# Notebooks and scratch files
+# Notebooks, scratch, tests (not needed in prod images)
 notebooks/
 scratch/
 Backend/scratch/
-Backend/plots/
+Backend/tests/
+Middleware/tests/
+*.ipynb
 
 # OS files
 .DS_Store
 Thumbs.db
-.codex_tmp/
-docs/
 
-# Docker files (not needed in build context)
+# Docs and configs not needed in image
+docs/
+.codex_tmp/
+.hermes/
+.agents/
+*.md
+!README.md
+
+# Docker meta (not needed inside context for compose)
 docker-compose*
 .dockerignore
+requirements.lock
+requirements.txt

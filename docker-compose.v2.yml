@@ -106,7 +106,7 @@ services:
     container_name: stad_frontend_v2
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "80:8080"
     depends_on:
       middleware:
         condition: service_healthy
@@ -114,7 +114,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1', timeout=3)\" || exit 1"
+          "wget -q --spider http://127.0.0.1:8080/ || exit 1"
         ]
       interval: 30s
       timeout: 10s

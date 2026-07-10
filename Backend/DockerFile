@@ -1,63 +1,40 @@
-# Build stage for Backend
+# ── Legacy Backend Dockerfile (v1) ──
+# DEPRECATED: Use Backend/Dockerfile.v2 with docker-compose.v2.yml
+# Kept for backward compatibility with docker-compose.split.yml
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
-# Metadata labels for Docker Hub
-LABEL maintainer="Satellite Telemetry Anomaly Detection Team"
-LABEL version="1.3"
-LABEL description="Backend AI Inference Engine for Satellite Telemetry Anomaly Detection"
+LABEL version="1.1-legacy"
+LABEL description="Backend AI Inference Engine (legacy — use Dockerfile.v2)"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 WORKDIR /app
 
-# Prevent interactive prompts during build
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
-# ── GPU: tell the NVIDIA container runtime to expose all GPUs
-# and enable compute + utility capabilities (required for CUDA + torch).
-# Mirrors the ENV set in the monolithic Dockerfile.
-ENV NVIDIA_VISIBLE_DEVICES=all \
-    NVIDIA_DRIVER_CAPABILITIES=compute,utility
-
-# Install system dependencies and Python 3.11
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    software-properties-common \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 \
-    python3.11-dev \
-    python3.11-distutils \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    python3.11 python3.11-dev python3.11-distutils curl && \
+    curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install pip for Python 3.11
-RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
-
-# Set Python 3.11 as the default 'python' and 'python3'
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
-
-# Create a non-root user and necessary directories
-RUN useradd -m appuser && \
-    mkdir -p data models results checkpoints processed && \
+RUN useradd -r -s /sbin/nologin appuser && \
+    mkdir -p data models results checkpoints && \
     chown -R appuser:appuser /app
 
-# Copy requirements from root context
 COPY --chown=appuser:appuser requirements.txt ./
-
-# Switch to appuser for pip installs and running
 USER appuser
-
-# Install python dependencies
 RUN pip install --no-cache-dir --user -r requirements.txt
-
-# Add user bin to PATH
 ENV PATH="/home/appuser/.local/bin:${PATH}"
 
-# Copy only Backend files from the root context
 COPY --chown=appuser:appuser Backend/ .
 
 EXPOSE 8001
 
-# Run the inference server
+HEALTHCHECK --interval=30s --timeout=5s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)" || exit 1
+
 CMD ["python", "serve.py"]

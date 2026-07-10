@@ -1,8 +1,8 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.11-slim-bookworm AS base
 
 LABEL maintainer="Satellite Telemetry Anomaly Detection Team"
-LABEL version="2.0"
-LABEL description="Backend API and Triton proxy for STAD-AI Version 2"
+LABEL version="2.1"
+LABEL description="Backend API for STAD-AI (optimized)"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -17,9 +17,16 @@ WORKDIR /app
 COPY docker/wheels /tmp/wheels
 COPY docker/runtime-requirements.txt /tmp/runtime-requirements.txt
 RUN python -m pip install --no-index --find-links /tmp/wheels -r /tmp/runtime-requirements.txt && \
-    rm -rf /tmp/wheels
+    rm -rf /tmp/wheels /tmp/runtime-requirements.txt && \
+    find /usr/local/lib/python3.11 -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; \
+    find /usr/local/lib/python3.11 -name '*.pyc' -delete 2>/dev/null; true
 
 COPY Backend/ ./Backend/
+
+# Non-root user
+RUN useradd -r -s /sbin/nologin appuser && \
+    chown -R appuser:appuser /app
+USER appuser
 
 WORKDIR /app/Backend
 

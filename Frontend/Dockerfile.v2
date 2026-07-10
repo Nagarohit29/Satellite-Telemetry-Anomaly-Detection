@@ -1,41 +1,35 @@
-FROM python:3.11-slim-bookworm
-
-LABEL maintainer="Satellite Telemetry Anomaly Detection Team"
-LABEL version="2.0"
-LABEL description="Static frontend for STAD-AI Version 2"
+# ── Frontend: nginx-alpine (smallest possible image ~10MB) ──
+FROM node:20-alpine AS build
 
 WORKDIR /app
+COPY Frontend/package.json Frontend/package-lock.json* ./
+RUN npm ci --production=false
+COPY Frontend/ .
+RUN npm run build
 
-RUN mkdir -p /etc/nginx/conf.d /usr/share/nginx/html /var/cache/nginx /var/log/nginx /run
+FROM nginx:1.27-alpine
 
-COPY docker/nginx-runtime/nginx /usr/sbin/nginx
-COPY docker/nginx-runtime/mime.types /etc/nginx/mime.types
-COPY docker/nginx-runtime/libcrypt.so.1 /lib/x86_64-linux-gnu/libcrypt.so.1
-COPY docker/nginx-runtime/libpcre2-8.so.0 /lib/x86_64-linux-gnu/libpcre2-8.so.0
-COPY docker/nginx-runtime/libssl.so.3 /lib/x86_64-linux-gnu/libssl.so.3
-COPY docker/nginx-runtime/libcrypto.so.3 /lib/x86_64-linux-gnu/libcrypto.so.3
-COPY docker/nginx-runtime/libz.so.1 /lib/x86_64-linux-gnu/libz.so.1
+LABEL maintainer="Satellite Telemetry Anomaly Detection Team"
+LABEL version="2.1"
+LABEL description="Static frontend for STAD-AI (optimized)"
 
-RUN chmod +x /usr/sbin/nginx && \
-    printf '%s\n' \
-        'user www-data;' \
-        'events {}' \
-        'http {' \
-        '    include /etc/nginx/mime.types;' \
-        '    default_type application/octet-stream;' \
-        '    sendfile on;' \
-        '    access_log /var/log/nginx/access.log;' \
-        '    error_log /var/log/nginx/error.log warn;' \
-        '    include /etc/nginx/conf.d/*.conf;' \
-        '}' \
-        > /etc/nginx/nginx.conf
+# Non-root: nginx-alpine supports running as nginx user on port 8080
+RUN sed -i 's/listen\s*80;/listen 8080;/' /etc/nginx/conf.d/default.conf && \
+    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d && \
+    touch /run/nginx.pid && chown nginx:nginx /run/nginx.pid
 
-COPY Frontend/dist /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 COPY Frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+# Fix port to 8080 for non-root
+RUN sed -i 's/listen 80;/listen 8080;/' /etc/nginx/conf.d/default.conf && \
+    chown nginx:nginx /etc/nginx/conf.d/default.conf
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=5 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1', timeout=3)" || exit 1
+USER nginx
 
-CMD ["/usr/sbin/nginx", "-g", "daemon off;"]
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --retries=5 \
+    CMD wget -q --spider http://127.0.0.1:8080/ || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]
