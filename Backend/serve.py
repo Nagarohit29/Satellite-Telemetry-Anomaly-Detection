@@ -11,6 +11,10 @@ import json
 import subprocess
 import urllib.request
 from functools import lru_cache
+import time as _time
+import logging
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from starlette.responses import Response
 from dotenv import load_dotenv
 from triton_client import infer_scores, health as triton_health
 
@@ -22,6 +26,8 @@ except Exception:  # pragma: no cover - optional runtime dependency in monolith 
 # Load environment variables
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Satellite Telemetry Backend API", version="2.0.0")
 
 app.add_middleware(
@@ -30,6 +36,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# ── Prometheus Metrics ──
+REQUEST_COUNT = Counter('backend_requests_total', 'Total requests', ['method', 'path', 'status'])
+REQUEST_LATENCY = Histogram('backend_request_duration_seconds', 'Request latency', ['method', 'path'])
+INFERENCE_DURATION = Histogram('backend_inference_duration_seconds', 'Inference latency')
+ACTIVE_REQUESTS = Gauge('backend_active_requests', 'Active concurrent requests')
+
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    ACTIVE_REQUESTS.inc()
+    start = _time.monotonic()
+    response = await call_next(request)
+    duration = _time.monotonic() - start
+    path = request.url.path.split('?')[0]
+    REQUEST_COUNT.labels(request.method, path, response.status_code).inc()
+    REQUEST_LATENCY.labels(request.method, path).observe(duration)
+    response.headers['X-Request-Duration-Ms'] = f'{duration * 1000:.1f}'
+    ACTIVE_REQUESTS.dec()
+    return response
+
+@app.get('/metrics')
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 def validate_env_vars():
     """Validate that required environment variables are set."""
@@ -255,7 +287,18 @@ def health():
             health_data["vram_allocated"] = f"{torch.cuda.memory_allocated(0) / (1024**3):.2f} GB"
         except Exception:
             pass
-            
+
+    # Disk usage for recordings
+    rec_dir = os.path.join(_smap_msl_root(), 'recordings')
+    if os.path.exists(rec_dir):
+        try:
+            files = [f for f in os.listdir(rec_dir) if f.endswith('.json')]
+            total_bytes = sum(os.path.getsize(os.path.join(rec_dir, f)) for f in files)
+            health_data['recordings_count'] = len(files)
+            health_data['recordings_disk_mb'] = round(total_bytes / (1024 * 1024), 2)
+        except Exception:
+            pass
+
     return health_data
 
 @app.post("/infer")

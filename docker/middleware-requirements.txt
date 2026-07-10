@@ -6,3 +6,4 @@ python-dotenv==1.0.1
 litellm==1.67.5
 anthropic==0.96.0
 openai==2.32.0
+prometheus_client==0.21.1

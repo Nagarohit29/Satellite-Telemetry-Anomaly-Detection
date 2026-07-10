@@ -197,6 +197,10 @@ def run_inference(data: np.ndarray):
             score = torch.mean((window[:, :, :input_feats] - output[:, :, :input_feats]) ** 2).item()
             scores.append(score)
 
+    # Free GPU memory to prevent VRAM fragmentation
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
+
     anomalies = [
         {"index": i, "score": round(s, 6), "anomaly": s > threshold}
         for i, s in enumerate(scores)

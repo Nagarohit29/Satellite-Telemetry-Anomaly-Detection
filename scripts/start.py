@@ -197,7 +197,14 @@ def main() -> int:
     log("Waiting for Ollama...")
     wait_for(OLLAMA_HEALTH_URL, "Ollama")
 
-    maybe_pull_ollama_model(os.getenv("OLLAMA_MODEL", "llama3.2"))
+    import threading
+    threading.Thread(
+        target=maybe_pull_ollama_model,
+        args=(os.getenv("OLLAMA_MODEL", "llama3.2"),),
+        daemon=True,
+        name="ollama-pull",
+    ).start()
+    log("Ollama model pull started in background.")
 
     log("Starting nginx...")
     start_process(["/usr/sbin/nginx", "-g", "daemon off;"], name="nginx")

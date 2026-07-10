@@ -13,6 +13,31 @@ logger = logging.getLogger(__name__)
 litellm.suppress_debug_info = True
 _LOCAL_PULL_LOCK = threading.Lock()
 
+# ── Circuit Breaker (per-provider) ──
+import time as _time
+_provider_failures: dict[str, tuple[int, float]] = {}  # provider -> (fail_count, last_fail_time)
+_CB_THRESHOLD = 5
+_CB_RESET_SECONDS = 60
+
+
+def _cb_is_open(provider: str) -> bool:
+    """Returns True if circuit is open (provider should be skipped)."""
+    state = _provider_failures.get(provider)
+    if state is None or state[0] < _CB_THRESHOLD:
+        return False
+    if _time.monotonic() - state[1] > _CB_RESET_SECONDS:
+        return False  # Half-open: allow one retry
+    return True
+
+
+def _cb_record_failure(provider: str):
+    state = _provider_failures.get(provider, (0, 0.0))
+    _provider_failures[provider] = (state[0] + 1, _time.monotonic())
+
+
+def _cb_record_success(provider: str):
+    _provider_failures.pop(provider, None)
+
 
 def _classify_error(e, model_id: str) -> str:
     err_str = str(e)
@@ -588,6 +613,9 @@ Keep it professional and concise like a real operations report."""
 
     last_error_msg = None
     for model_cfg in models_to_try:
+        if _cb_is_open(model_cfg["id"]):
+            logger.info(f"Circuit breaker open for {model_cfg['id']}, skipping")
+            continue
         try:
             model_name = model_cfg["model"]
             if model_cfg["id"] == "ollama_local":
@@ -614,6 +642,7 @@ Keep it professional and concise like a real operations report."""
             if model_cfg.get("api_key"):
                 kwargs["api_key"] = model_cfg["api_key"]
             response = litellm.completion(**kwargs)
+            _cb_record_success(model_cfg["id"])
             return response.choices[0].message.content
 
         except (litellm.exceptions.RateLimitError, litellm.exceptions.BudgetExceededError) as e:
@@ -621,6 +650,7 @@ Keep it professional and concise like a real operations report."""
             return _classify_error(e, model_cfg["id"])
         except litellm.exceptions.AuthenticationError as e:
             logger.warning(f"Auth error ({model_cfg['model']}): {e}")
+            _cb_record_failure(model_cfg["id"])
             last_error_msg = _classify_error(e, model_cfg["id"])
             continue
         except Exception as e:
@@ -659,6 +689,9 @@ def chat_with_llm(messages: list, model_preference: str = None) -> str:
 
     last_error_msg = None
     for model_cfg in models_to_try:
+        if _cb_is_open(model_cfg["id"]):
+            logger.info(f"Circuit breaker open for {model_cfg['id']}, skipping")
+            continue
         try:
             model_name = model_cfg["model"]
             if model_cfg["id"] == "ollama_local":
@@ -685,6 +718,7 @@ def chat_with_llm(messages: list, model_preference: str = None) -> str:
             if model_cfg.get("api_key"):
                 kwargs["api_key"] = model_cfg["api_key"]
             response = litellm.completion(**kwargs)
+            _cb_record_success(model_cfg["id"])
             return response.choices[0].message.content
 
         except (litellm.exceptions.RateLimitError, litellm.exceptions.BudgetExceededError) as e:
@@ -692,10 +726,12 @@ def chat_with_llm(messages: list, model_preference: str = None) -> str:
             return _classify_error(e, model_cfg["id"])
         except litellm.exceptions.AuthenticationError as e:
             logger.warning(f"Auth error ({model_cfg['model']}): {e}")
+            _cb_record_failure(model_cfg["id"])
             last_error_msg = _classify_error(e, model_cfg["id"])
             continue
         except Exception as e:
             logger.warning(f"Chat failed ({model_cfg['model']}): {e}")
+            _cb_record_failure(model_cfg["id"])
             last_error_msg = _classify_error(e, model_cfg["id"])
             continue
 

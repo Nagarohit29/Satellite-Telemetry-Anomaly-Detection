@@ -3,6 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import sys
 from dotenv import load_dotenv
+import time as _time
+import logging
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from starlette.responses import Response
+from starlette.middleware.gzip import GZipMiddleware
 
 # Force reload environment variables (checks project root .env for Web UI overrides)
 def reload_env(path=None):
@@ -56,6 +61,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# ── Prometheus Metrics ──
+MW_REQUEST_COUNT = Counter('middleware_requests_total', 'Total requests', ['method', 'path', 'status'])
+MW_REQUEST_LATENCY = Histogram('middleware_request_duration_seconds', 'Request latency', ['method', 'path'])
+MW_ACTIVE_REQUESTS = Gauge('middleware_active_requests', 'Active concurrent requests')
+
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    MW_ACTIVE_REQUESTS.inc()
+    start = _time.monotonic()
+    response = await call_next(request)
+    duration = _time.monotonic() - start
+    path = request.url.path.split('?')[0]
+    MW_REQUEST_COUNT.labels(request.method, path, response.status_code).inc()
+    MW_REQUEST_LATENCY.labels(request.method, path).observe(duration)
+    response.headers['X-Request-Duration-Ms'] = f'{duration * 1000:.1f}'
+    MW_ACTIVE_REQUESTS.dec()
+    return response
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from routers import predict, alerts, channels, chat, config
@@ -78,6 +103,10 @@ async def health():
 @app.get("/api/health")
 async def api_health():
     return await call_health()
+
+@app.get('/metrics')
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 if __name__ == "__main__":
     try:

@@ -144,6 +144,32 @@ services:
     networks:
       - stad_v2_net
 
+  # ── Optional: Monitoring Stack (start with --profile monitoring) ──
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: stad_prometheus
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - stad_v2_net
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: stad_grafana
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - stad_v2_net
+
 volumes:
   ollama_data:
 
