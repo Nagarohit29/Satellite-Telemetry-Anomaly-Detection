@@ -10,6 +10,8 @@ def download_file(args):
         temp_dest = file_path.with_name(file_path.name + ".tmp")
         urllib.request.urlretrieve(url, temp_dest)
         temp_dest.replace(file_path)
+        if file_path.name == "nginx" or file_path.as_posix() == "/usr/sbin/nginx":
+            os.chmod(file_path, 0o755)
         print(f"Successfully restored {file_path}", flush=True)
         return True
     except Exception as e:

@@ -15,8 +15,8 @@ FROM ${TRITON_BASE}
 ARG OLLAMA_MODEL_DEFAULT=llama3.2
 
 LABEL maintainer="Satellite Telemetry Anomaly Detection Team"
-LABEL version="3.0.2-hf"
-LABEL description="STAD-AI V3.0.2 Hugging Face Spaces monolithic runtime — Triton inference, LLM orchestration, full observability"
+LABEL version="3.0.3-hf"
+LABEL description="STAD-AI V3.0.3 Hugging Face Spaces monolithic runtime — Triton inference, LLM orchestration, full observability"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
