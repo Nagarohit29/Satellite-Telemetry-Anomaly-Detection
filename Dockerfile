@@ -61,14 +61,14 @@ RUN chmod +x /usr/sbin/nginx && \
         '}' \
         > /etc/nginx/nginx.conf
 
-# Ollama — CUDA 12 only (skip vulkan, cuda_v13, mlx for ~2GB savings)
+# Ollama — CUDA 12 and CPU runners (skip CUDA 11 and other unused drivers for ~2.3GB savings)
 COPY --from=ollama-source /usr/bin/ollama /usr/bin/ollama
-COPY --from=ollama-source /usr/lib/ollama/libggml-base.so /usr/lib/ollama/libggml-base.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-base.so.0 /usr/lib/ollama/libggml-base.so.0
-COPY --from=ollama-source /usr/lib/ollama/libggml-base.so.0.0.0 /usr/lib/ollama/libggml-base.so.0.0.0
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-x64.so /usr/lib/ollama/libggml-cpu-x64.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-haswell.so /usr/lib/ollama/libggml-cpu-haswell.so
-COPY --from=ollama-source /usr/lib/ollama/cuda_v12 /usr/lib/ollama/cuda_v12
+COPY --from=ollama-source /usr/lib/ollama/runners/cpu_avx /usr/lib/ollama/runners/cpu_avx
+COPY --from=ollama-source /usr/lib/ollama/runners/cpu_avx2 /usr/lib/ollama/runners/cpu_avx2
+COPY --from=ollama-source /usr/lib/ollama/runners/cuda_v12_avx /usr/lib/ollama/runners/cuda_v12_avx
+COPY --from=ollama-source /usr/lib/ollama/libcublas.so.12* /usr/lib/ollama/
+COPY --from=ollama-source /usr/lib/ollama/libcublasLt.so.12* /usr/lib/ollama/
+COPY --from=ollama-source /usr/lib/ollama/libcudart.so.12* /usr/lib/ollama/
 
 # Python deps — single layer with cleanup
 COPY docker/monolith-runtime-requirements.txt /tmp/requirements.txt
