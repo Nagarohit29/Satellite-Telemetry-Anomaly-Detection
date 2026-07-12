@@ -1,3 +1,13 @@
+---
+title: STAD-AI
+emoji: 🛰️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Satellite Telemetry Anomaly Detection (STAD)
 
 A comprehensive full-stack solution for monitoring satellite telemetry and detecting anomalies using state-of-the-art Deep Transformer Networks. This project combines advanced machine learning with a modern web interface and AI-driven incident analysis.
