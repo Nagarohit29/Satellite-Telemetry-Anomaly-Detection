@@ -48,12 +48,12 @@ def load_model(config):
     model_path = get_model_path(config)
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model checkpoint not found at {model_path}. Please train the model first.")
-    
+
     device = select_inference_device()
-    
+
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     state_dict = checkpoint.get('model_state_dict', checkpoint)
-    
+
     # Infer feature count from the FCN layer in the state dict
     # TranAD has a final linear layer: nn.Linear(2 * feats, feats)
     # The weight shape is [out_features, in_features] -> [feats, 2 * feats]
@@ -67,9 +67,8 @@ def load_model(config):
         expected_feats = 25
 
     logger.debug(f"Detected model features: {expected_feats}")
-    
+
     # Load the model architecture
-    from src.models import TranAD
     model = TranAD(expected_feats)
     model.load_state_dict(state_dict)
     model = model.to(device)
@@ -177,10 +176,10 @@ def export_triton_model(output_path: str | os.PathLike[str]) -> dict:
 def run_inference(data: np.ndarray):
     config = load_config()
     model, device, expected_feats = get_cached_model(config)
-    
+
     # Ensure input data matches model dimensions
     data, input_feats = adapt_input_features(data, expected_feats)
-    
+
     window_size = config["inference"]["window_size"]
     threshold = float(os.getenv("INFERENCE_THRESHOLD", config["inference"]["threshold"]))
 

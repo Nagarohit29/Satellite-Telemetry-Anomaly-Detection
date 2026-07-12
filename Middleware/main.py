@@ -4,7 +4,6 @@ import os
 import sys
 from dotenv import load_dotenv
 import time as _time
-import logging
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 from starlette.middleware.gzip import GZipMiddleware
@@ -15,7 +14,7 @@ def reload_env(path=None):
     config_env = "/app/config/.env"
     root_env = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
     middleware_env = os.path.join(os.path.dirname(__file__), '.env')
-    
+
     # Load in order so more specific files can override defaults.
     targets = [target for target in [path, config_env, root_env, middleware_env] if target]
     loaded = set()
@@ -42,12 +41,12 @@ def validate_env_vars():
     }
     configured = [name for var, name in providers.items() if os.getenv(var)]
     missing = [name for var, name in providers.items() if not os.getenv(var)]
-    
+
     if configured:
         print(f"INFO: Configured AI providers: {', '.join(configured)}")
     if missing:
         print(f"INFO: Unconfigured AI providers (add keys via Settings): {', '.join(missing)}")
-    
+
     if not os.getenv("BACKEND_URL"):
         print("INFO: BACKEND_URL not set, using default: http://localhost:8001")
 
