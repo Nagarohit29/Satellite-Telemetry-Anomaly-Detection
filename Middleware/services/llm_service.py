@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import threading
+import time as _time
 import urllib.error
 import urllib.request
 
@@ -14,7 +15,6 @@ litellm.suppress_debug_info = True
 _LOCAL_PULL_LOCK = threading.Lock()
 
 # ── Circuit Breaker (per-provider) ──
-import time as _time
 _provider_failures: dict[str, tuple[int, float]] = {}  # provider -> (fail_count, last_fail_time)
 _CB_THRESHOLD = 5
 _CB_RESET_SECONDS = 60

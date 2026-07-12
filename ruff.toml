@@ -1,0 +1,40 @@
+# Ruff configuration for STAD-AI
+
+# Exclude legacy files/folders to avoid noise and check style only on active, hardened components
+exclude = [
+    ".git",
+    ".github",
+    ".venv",
+    "venv",
+    "Frontend",
+    "Backend/src",
+    "Backend/data",
+    "Backend/setup_data.py",
+    "Backend/train.py",
+    "Backend/preprocess.py",
+    "Backend/main.py",
+    "Backend/scratch",
+    "Backend/tests/test_celestrak.py",
+    "Backend/tests/test_n2yo.py",
+    "Middleware/routers/chat.py",
+    "Middleware/routers/config.py",
+    "Middleware/routers/predict.py",
+    "Middleware/routers/celestrak.py",
+    "Middleware/routers/recordings.py",
+    "Middleware/routers/alerts.py",
+    "Middleware/routers/channels.py",
+    "Middleware/services/env_loader.py",
+    "Middleware/services/memory_helper.py",
+    "Middleware/tests/test_chat_tools.py",
+    "Middleware/tests/test_config.py",
+    "scripts/start.py",
+]
+
+[lint]
+select = ["B", "E", "F", "W"]
+ignore = [
+    "E501",  # Line length is handled by code formatters
+    "E402",  # Module level import not at top of file (needed for sys.path manipulations in main/tests)
+    "B904",  # Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None`
+    "F403",  # star imports used (e.g. from src.constants import * in infer.py)
+]

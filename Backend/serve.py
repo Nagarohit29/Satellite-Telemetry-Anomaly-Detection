@@ -66,7 +66,6 @@ def metrics():
 def validate_env_vars():
     """Validate that required environment variables are set."""
     optional_vars = ['ANTHROPIC_API_KEY', 'BACKEND_URL']
-    missing = []
     for var in optional_vars:
         if not os.getenv(var):
             print(f"WARNING: Optional environment variable {var} not set")
@@ -269,7 +268,7 @@ def root():
 def health():
     cuda_available, device_name = _detect_compute()
     triton_state = triton_health()
-    
+
     health_data = {
         "status": "healthy" if triton_state["ready"] and triton_state["model_ready"] else "degraded",
         "cuda": cuda_available,
@@ -280,7 +279,7 @@ def health():
         "triton_url": triton_state["url"],
         "triton_model_name": triton_state["model_name"],
     }
-    
+
     if cuda_available and torch is not None:
         try:
             health_data["vram_total"] = f"{torch.cuda.get_device_properties(0).total_memory / (1024**3):.2f} GB"
@@ -407,15 +406,15 @@ if __name__ == "__main__":
     try:
         # Validate environment variables
         validate_env_vars()
-        
+
         # Load configuration
         config = load_config()
-        
+
         # Extract server configuration
         server_config = config.get("server", {})
         host = server_config.get("host", "0.0.0.0")
         port = server_config.get("port", 8001)
-        
+
         print(f"Starting Satellite Telemetry Backend on {host}:{port}")
         uvicorn.run(
             app,
