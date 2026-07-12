@@ -8,3 +8,4 @@ anthropic==0.96.0
 openai==2.32.0
 numpy==1.26.4
 PyYAML==6.0.3
+prometheus_client==0.21.1
