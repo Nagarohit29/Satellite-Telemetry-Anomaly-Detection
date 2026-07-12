@@ -48,7 +48,7 @@ docker run --gpus all \
   -p 11434:11434 \
   -p 8008:8008 \
   -v ollama_data:/root/.ollama \
-  -d nagarohit/satellite-telemetry-anomaly-detection:2.0
+  -d nagarohit/satellite-telemetry-anomaly-detection:3.0
 ```
 
 ### Option 2: Run with CPU Only
@@ -63,7 +63,7 @@ docker run \
   -p 11434:11434 \
   -p 8008:8008 \
   -v ollama_data:/root/.ollama \
-  -d nagarohit/satellite-telemetry-anomaly-detection:2.0
+  -d nagarohit/satellite-telemetry-anomaly-detection:3.0
 ```
 
 ## API Keys

@@ -15,8 +15,8 @@ FROM ${TRITON_BASE}
 ARG OLLAMA_MODEL_DEFAULT=llama3.2
 
 LABEL maintainer="Satellite Telemetry Anomaly Detection Team"
-LABEL version="2.0-hf"
-LABEL description="STAD-AI V2.0 Hugging Face Spaces monolithic runtime"
+LABEL version="3.0-hf"
+LABEL description="STAD-AI V3.0 Hugging Face Spaces monolithic runtime — Triton inference, LLM orchestration, full observability"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -53,26 +53,22 @@ COPY docker/nginx-runtime/libcrypto.so.3 /lib/x86_64-linux-gnu/libcrypto.so.3
 COPY docker/nginx-runtime/libz.so.1 /lib/x86_64-linux-gnu/libz.so.1
 RUN chmod +x /usr/sbin/nginx
 
+# Ollama — CUDA 12 and CPU runners (skip CUDA 11/13 and other unused drivers for ~2.3GB savings)
 COPY --from=ollama-source /usr/bin/ollama /usr/bin/ollama
-COPY --from=ollama-source /usr/lib/ollama/include /usr/lib/ollama/include
-COPY --from=ollama-source /usr/lib/ollama/libggml-base.so /usr/lib/ollama/libggml-base.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-base.so.0 /usr/lib/ollama/libggml-base.so.0
-COPY --from=ollama-source /usr/lib/ollama/libggml-base.so.0.0.0 /usr/lib/ollama/libggml-base.so.0.0.0
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-x64.so /usr/lib/ollama/libggml-cpu-x64.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-sse42.so /usr/lib/ollama/libggml-cpu-sse42.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-sandybridge.so /usr/lib/ollama/libggml-cpu-sandybridge.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-alderlake.so /usr/lib/ollama/libggml-cpu-alderlake.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-haswell.so /usr/lib/ollama/libggml-cpu-haswell.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-icelake.so /usr/lib/ollama/libggml-cpu-icelake.so
-COPY --from=ollama-source /usr/lib/ollama/libggml-cpu-skylakex.so /usr/lib/ollama/libggml-cpu-skylakex.so
-COPY --from=ollama-source /usr/lib/ollama/vulkan /usr/lib/ollama/vulkan
-COPY --from=ollama-source /usr/lib/ollama/cuda_v13 /usr/lib/ollama/cuda_v13
-COPY --from=ollama-source /usr/lib/ollama/mlx_cuda_v13 /usr/lib/ollama/mlx_cuda_v13
-COPY --from=ollama-source /usr/lib/ollama/cuda_v12 /usr/lib/ollama/cuda_v12
+COPY --from=ollama-source /usr/lib/ollama/runners/cpu_avx /usr/lib/ollama/runners/cpu_avx
+COPY --from=ollama-source /usr/lib/ollama/runners/cpu_avx2 /usr/lib/ollama/runners/cpu_avx2
+COPY --from=ollama-source /usr/lib/ollama/runners/cuda_v12_avx /usr/lib/ollama/runners/cuda_v12_avx
+COPY --from=ollama-source /usr/lib/ollama/libcublas.so.12* /usr/lib/ollama/
+COPY --from=ollama-source /usr/lib/ollama/libcublasLt.so.12* /usr/lib/ollama/
+COPY --from=ollama-source /usr/lib/ollama/libcudart.so.12* /usr/lib/ollama/
 
-COPY docker/monolith-runtime-requirements.txt /tmp/monolith-runtime-requirements.txt
-RUN python3 -m pip install --no-cache-dir --disable-pip-version-check --timeout 240 --retries 20 -r /tmp/monolith-runtime-requirements.txt && \
-    rm -f /tmp/monolith-runtime-requirements.txt
+# Python deps — single layer with cleanup
+COPY docker/monolith-runtime-requirements.txt /tmp/requirements.txt
+RUN python3 -m pip install --no-cache-dir --disable-pip-version-check --timeout 240 --retries 20 -r /tmp/requirements.txt && \
+    rm -f /tmp/requirements.txt && \
+    find /usr/local/lib/python3.*/dist-packages -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; \
+    find /usr/local/lib/python3.*/dist-packages -name '*.pyc' -delete 2>/dev/null; \
+    rm -rf /root/.cache /tmp/* /var/tmp/*; true
 
 COPY triton/model_repository /models
 COPY --from=frontend-build /build/dist /usr/share/nginx/html
@@ -81,8 +77,9 @@ COPY Backend/ ./Backend/
 COPY Middleware/ ./Middleware/
 COPY scripts/start.py /app/start.py
 
-# Ensure permissions are open for Hugging Face's non-root user (usually UID 1000)
-RUN chmod -R 777 /app /models /etc/nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /run /usr/share/ollama /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
+# Cleanup .pyc from app code and fix permissions
+RUN find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true && \
+    chmod -R 777 /app /models /etc/nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /run /usr/share/ollama /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
 
 # Set user to 1000 to match Hugging Face Spaces requirements
 USER 1000
