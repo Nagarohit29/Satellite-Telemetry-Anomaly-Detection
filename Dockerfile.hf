@@ -15,8 +15,8 @@ FROM ${TRITON_BASE}
 ARG OLLAMA_MODEL_DEFAULT=llama3.2
 
 LABEL maintainer="Satellite Telemetry Anomaly Detection Team"
-LABEL version="3.0.1-hf"
-LABEL description="STAD-AI V3.0.1 Hugging Face Spaces monolithic runtime — Triton inference, LLM orchestration, full observability"
+LABEL version="3.0.2-hf"
+LABEL description="STAD-AI V3.0.2 Hugging Face Spaces monolithic runtime — Triton inference, LLM orchestration, full observability"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -81,8 +81,8 @@ RUN python3 /tmp/download_lfs.py && rm -f /tmp/download_lfs.py
 
 # Cleanup .pyc from app code and fix permissions
 RUN find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true && \
-    mkdir -p /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp && \
-    chmod -R 777 /app /models /etc/nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /run /usr/share/ollama /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
+    mkdir -p /home/triton-server /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp && \
+    chmod -R 777 /home/triton-server /app /models /etc/nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /run /usr/share/ollama /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
 
 # Set user to 1000 to match Hugging Face Spaces requirements
 USER 1000
