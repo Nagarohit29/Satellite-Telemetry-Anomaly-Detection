@@ -41,11 +41,19 @@ git add Dockerfile
 git commit -m "Use HF-optimized Dockerfile for Spaces deployment"
 ```
 
-### Step 4: Force Push to Hugging Face
+### Step 4: Push Large Files and Code to Hugging Face
 
-```powershell
-git push hf hf-deploy:main --force
-```
+Because this project uses Git LFS for large binary files (such as `model.pt`, Nginx binary, and the preloaded `.npy` telemetry datasets), you **must push all LFS files first** to Hugging Face. Otherwise, the Hugging Face LFS registry will not contain the files, and the build will fail.
+
+1. **Push LFS objects first:**
+   ```powershell
+   git lfs push hf --all
+   ```
+
+2. **Force push the code branch:**
+   ```powershell
+   git push hf hf-deploy:main --force
+   ```
 
 When prompted for credentials:
 - **Username:** Your Hugging Face username (e.g., `Nagarohit`)
@@ -88,9 +96,17 @@ git merge main
 copy Dockerfile.hf Dockerfile
 git add Dockerfile
 git commit -m "Update HF deployment"
+git lfs push hf --all
 git push hf hf-deploy:main --force
 git checkout main
 ```
+
+### Git LFS Handling during Build
+Because Hugging Face's Docker container build context does not automatically smudge (download) Git LFS pointers, the container environment would normally only see the tiny text pointers rather than actual binaries. 
+
+This is resolved using:
+1. **`scripts/download_lfs.py`**: A parallelized, self-healing Python script that runs during the Docker build stage. It scans the copied directories for LFS pointer signatures, downloads the actual files from the Space repository's public HTTPS `/resolve/` endpoint, and overwrites the pointer files.
+2. **Post-Download Permissions**: The script automatically restores executable permissions (`0o755`) for the downloaded Nginx binary, avoiding startup permission errors.
 
 ### Cold Starts
 Free-tier spaces go to sleep after ~48 hours of inactivity. The first visitor after a sleep period will trigger a cold start (~2-5 minutes). This is normal for the free tier.

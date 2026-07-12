@@ -107,6 +107,13 @@ Notes for Docker Hub users:
 - On the first run, the same container pulls `llama3.2` into the named volume (`ollama_data`) just like the earlier `1.0` workflow. Later restarts reuse the cached model instead of downloading it again.
 - The first container startup can take several minutes because the model pull, Triton startup, and health checks all need to finish before the stack is marked ready. On the GPU path, the first local Ollama chat request may spend additional time loading the model into VRAM before responses become instant on later requests.
 
+### Hugging Face Spaces Deployment (Free Tier)
+
+This project is fully optimized to run on Hugging Face Spaces using the free CPU basic tier. The live demo is hosted at:
+[https://huggingface.co/spaces/Nagarohit/stad-ai](https://huggingface.co/spaces/Nagarohit/stad-ai)
+
+For detailed deployment instructions, including how to push Git LFS objects and manage container permissions, see the [Hugging Face Spaces Deployment Guide](./DEPLOY_HF.md).
+
 ### Local Development Setup
 
 If you prefer to run the system natively without Docker, you will need to start the three core components (Backend, Middleware, and Frontend) individually.
