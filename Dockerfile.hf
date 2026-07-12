@@ -79,6 +79,7 @@ COPY scripts/start.py /app/start.py
 
 # Cleanup .pyc from app code and fix permissions
 RUN find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true && \
+    mkdir -p /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp && \
     chmod -R 777 /app /models /etc/nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /run /usr/share/ollama /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
 
 # Set user to 1000 to match Hugging Face Spaces requirements
