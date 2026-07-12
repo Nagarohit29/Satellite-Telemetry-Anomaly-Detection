@@ -24,13 +24,14 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 Frontend/node_modules/
-Frontend/src/
-Frontend/public/
-Frontend/package*.json
-Frontend/vite.config.js
-Frontend/index.html
-Frontend/.eslintrc*
-Frontend/README*
+# Do not ignore Frontend/src, public, package.json etc. since we build inside Docker on HF and keep branches in sync
+# Frontend/src/
+# Frontend/public/
+# Frontend/package*.json
+# Frontend/vite.config.js
+# Frontend/index.html
+# Frontend/.eslintrc*
+# Frontend/README*
 !Frontend/dist/
 !Frontend/dist/**
 !Frontend/nginx.monolith.conf
