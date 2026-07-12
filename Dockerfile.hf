@@ -76,6 +76,8 @@ COPY Frontend/nginx.hf.conf /etc/nginx/nginx.conf
 COPY Backend/ ./Backend/
 COPY Middleware/ ./Middleware/
 COPY scripts/start.py /app/start.py
+COPY scripts/download_lfs.py /tmp/download_lfs.py
+RUN python3 /tmp/download_lfs.py && rm -f /tmp/download_lfs.py
 
 # Cleanup .pyc from app code and fix permissions
 RUN find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true && \
