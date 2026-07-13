@@ -1249,7 +1249,7 @@ export default function AIChat({
                 localStorage.removeItem("selectedModel");
               }
             }}
-            hideTelemetrySettings={true}
+            hideTelemetrySettings={false}
           />
         </div>
       )}

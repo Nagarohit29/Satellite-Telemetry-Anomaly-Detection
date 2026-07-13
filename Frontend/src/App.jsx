@@ -5,7 +5,6 @@ import Alerts from "./pages/Alerts";
 import Upload from "./pages/Upload";
 import AIChat from "./pages/AIChat";
 import StatusBar from "./components/StatusBar";
-import AIAssistant from "./components/AIAssistant";
 import SettingsModal from "./components/SettingsModal";
 
 export default function App() {
@@ -153,9 +152,6 @@ export default function App() {
             {pages[activeTab]}
           </div>
         </main>
-        
-        {/* AI Assistant Chat Component */}
-        <AIAssistant selectedModel={selectedModel} />
       </div>
     </div>
   );
