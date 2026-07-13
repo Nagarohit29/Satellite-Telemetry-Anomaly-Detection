@@ -9,22 +9,7 @@ from starlette.responses import Response
 from starlette.middleware.gzip import GZipMiddleware
 
 # Force reload environment variables (checks project root .env for Web UI overrides)
-def reload_env(path=None):
-    """Dynamically reload environment variables from the project env files."""
-    config_env = "/app/config/.env"
-    root_env = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-    middleware_env = os.path.join(os.path.dirname(__file__), '.env')
-
-    # Load in order so more specific files can override defaults.
-    targets = [target for target in [path, config_env, root_env, middleware_env] if target]
-    loaded = set()
-    for target in targets:
-        if target in loaded:
-            continue
-        if os.path.exists(target):
-            load_dotenv(target, override=True)
-            loaded.add(target)
-    load_dotenv()
+from services.env_loader import reload_env
 
 # Initial load
 reload_env()

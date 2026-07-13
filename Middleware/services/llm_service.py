@@ -428,7 +428,7 @@ def _ollama_direct_chat(
 
 
 def get_available_models() -> list:
-    from main import reload_env
+    from services.env_loader import reload_env
 
     reload_env()
     models = []
@@ -675,7 +675,7 @@ Keep it professional and concise like a real operations report."""
 
 
 def chat_with_llm(messages: list, model_preference: str = None) -> str:
-    from main import reload_env
+    from services.env_loader import reload_env
 
     reload_env()
     models_to_try = _build_models_to_try(model_preference)
