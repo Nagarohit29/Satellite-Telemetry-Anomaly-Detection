@@ -22,4 +22,4 @@ parser.add_argument('--retrain',
 parser.add_argument('--less', 
 					action='store_true', 
 					help="train using less data")
-args = parser.parse_args()
+args, _ = parser.parse_known_args()

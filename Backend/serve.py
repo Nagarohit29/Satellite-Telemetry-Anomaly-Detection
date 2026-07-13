@@ -317,12 +317,17 @@ def infer(req: InferRequest):
             )
 
         prepared, original_feats = adapt_input_features(data.astype(np.float32, copy=False), signature["expected_feats"])
-        print(
-            f"Forwarding inference request for channel {req.channel} "
-            f"to Triton with shape {prepared.shape}"
-        )
-        scores = infer_scores(prepared)
         threshold = float(signature["threshold"])
+        try:
+            scores = infer_scores(prepared)
+            engine = "triton"
+        except Exception as triton_err:
+            logger.warning(f"Triton inference failed: {triton_err}. Falling back to local PyTorch.")
+            from infer import run_inference
+            result = run_inference(data)
+            scores = result["scores"]
+            engine = "pytorch"
+
         cuda_available, _device_name = _detect_compute()
         anomalies = [
             {"index": i, "score": round(float(score), 6), "anomaly": float(score) > threshold}
@@ -339,7 +344,7 @@ def infer(req: InferRequest):
             "window_size": signature["window_size"],
             "total_windows": len(scores),
             "anomaly_count": sum(1 for a in anomalies if a["anomaly"]),
-            "inference_engine": "triton",
+            "inference_engine": engine,
         }
     except FileNotFoundError as e:
         raise HTTPException(
