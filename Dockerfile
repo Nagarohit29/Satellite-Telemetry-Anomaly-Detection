@@ -4,6 +4,13 @@ ARG OLLAMA_MODEL_DEFAULT=llama3.2
 
 FROM ollama/ollama:0.5.7 AS ollama-source
 
+FROM node:22-slim AS frontend-build
+WORKDIR /build
+COPY Frontend/package.json Frontend/package-lock.json ./
+RUN npm ci
+COPY Frontend/ ./
+RUN npm run build
+
 # trunk-ignore(checkov/CKV_DOCKER_7)
 FROM ${TRITON_BASE}
 ARG OLLAMA_MODEL_DEFAULT=llama3.2
@@ -81,7 +88,7 @@ RUN python3 -m pip install --no-cache-dir --disable-pip-version-check --timeout 
 
 # Application code
 COPY triton/model_repository /models
-COPY Frontend/dist /usr/share/nginx/html
+COPY --from=frontend-build /build/dist /usr/share/nginx/html
 COPY Frontend/nginx.monolith.conf /etc/nginx/conf.d/default.conf
 COPY Backend/ ./Backend/
 COPY Middleware/ ./Middleware/
