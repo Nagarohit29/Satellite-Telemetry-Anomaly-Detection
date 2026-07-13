@@ -81,3 +81,128 @@ async def call_train(dataset: str = "SMAP", epochs: int = 5) -> dict:
         return response.json()
     except Exception as e:
         raise Exception(f"Training failed: {str(e)}")
+
+
+async def call_celestrak_constellation(group: str) -> dict:
+    try:
+        client = _get_client(timeout=30.0)
+        response = await client.get(f"{BACKEND_URL}/celestrak/constellation/{group}")
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise Exception(f"Failed to fetch Celestrak constellation data: {str(e)}")
+
+
+async def call_celestrak_satellite(catnr: int) -> dict:
+    try:
+        client = _get_client(timeout=30.0)
+        response = await client.get(f"{BACKEND_URL}/celestrak/satellite/{catnr}")
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise Exception(f"Failed to fetch Celestrak satellite data: {str(e)}")
+
+
+async def call_celestrak_infer(mode: str, target: str) -> dict:
+    try:
+        client = _get_client(timeout=180.0)
+        response = await client.post(
+            f"{BACKEND_URL}/celestrak/infer",
+            json={"mode": mode, "target": target}
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise Exception(f"Failed to run Celestrak inference: {str(e)}")
+
+
+async def call_export_csv(headers: list, rows: list) -> str:
+    try:
+        client = _get_client(timeout=30.0)
+        response = await client.post(
+            f"{BACKEND_URL}/export/csv",
+            json={"headers": headers, "rows": rows}
+        )
+        response.raise_for_status()
+        return response.text
+    except Exception as e:
+        raise Exception(f"Failed to export CSV: {str(e)}")
+
+
+async def call_list_recordings() -> dict:
+    try:
+        client = _get_client(timeout=10.0)
+        response = await client.get(f"{BACKEND_URL}/recordings")
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise Exception(f"Failed to list recordings: {str(e)}")
+
+
+async def call_save_recording(payload: dict) -> dict:
+    try:
+        client = _get_client(timeout=30.0)
+        response = await client.post(
+            f"{BACKEND_URL}/recordings",
+            json=payload
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise Exception(f"Failed to save recording: {str(e)}")
+
+
+async def call_get_recording(rec_id: str) -> dict:
+    try:
+        client = _get_client(timeout=10.0)
+        response = await client.get(f"{BACKEND_URL}/recordings/{rec_id}")
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise Exception(f"Failed to fetch recording {rec_id}: {str(e)}")
+
+
+async def call_delete_recording(rec_id: str) -> dict:
+    try:
+        client = _get_client(timeout=10.0)
+        response = await client.delete(f"{BACKEND_URL}/recordings/{rec_id}")
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        raise Exception(f"Failed to delete recording {rec_id}: {str(e)}")
+
+
+async def call_satellite_passes(
+    norad_id: int,
+    observer_lat: float = 0.0,
+    observer_lng: float = 0.0,
+    observer_alt: float = 0.0,
+    days: int = 2,
+    min_elevation: float = 10.0
+) -> dict:
+    try:
+        client = _get_client(timeout=30.0)
+        headers = {}
+        n2yo_key = os.getenv("N2YO_API_KEY", "")
+        if n2yo_key:
+            headers["X-N2YO-API-Key"] = n2yo_key
+            
+        response = await client.get(
+            f"{BACKEND_URL}/satellite/{norad_id}/passes",
+            params={
+                "observer_lat": observer_lat,
+                "observer_lng": observer_lng,
+                "observer_alt": observer_alt,
+                "days": days,
+                "min_elevation": min_elevation
+            },
+            headers=headers
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.ConnectError:
+        raise Exception(f"Cannot connect to backend at {BACKEND_URL}")
+    except httpx.TimeoutException:
+        raise Exception("Backend passes request timed out")
+    except Exception as e:
+        raise Exception(f"Failed to fetch satellite passes: {str(e)}")

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Activity, AlertTriangle, UploadCloud, Settings, Satellite, Server } from "lucide-react";
+import { Activity, AlertTriangle, UploadCloud, Settings, Satellite, Server, MessageSquare } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Alerts from "./pages/Alerts";
 import Upload from "./pages/Upload";
+import AIChat from "./pages/AIChat";
 import StatusBar from "./components/StatusBar";
 import AIAssistant from "./components/AIAssistant";
 import SettingsModal from "./components/SettingsModal";
@@ -13,6 +14,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState(() => {
     return localStorage.getItem("selectedModel") || "";
   });
+  const [activeTelemetry, setActiveTelemetry] = useState(null);
 
   // Persist selected model (or clear it when deselected)
   useEffect(() => {
@@ -27,12 +29,14 @@ export default function App() {
     { id: "Dashboard", icon: Activity, label: "Live Telemetry" },
     { id: "Alerts", icon: AlertTriangle, label: "Incident Alerts" },
     { id: "Upload", icon: UploadCloud, label: "Batch Inference" },
+    { id: "AIChat", icon: MessageSquare, label: "AI Analyst" },
   ];
 
   const pages = {
-    Dashboard: <Dashboard selectedModel={selectedModel} />,
+    Dashboard: <Dashboard selectedModel={selectedModel} onActiveTelemetryChange={setActiveTelemetry} />,
     Alerts: <Alerts />,
-    Upload: <Upload />
+    Upload: <Upload />,
+    AIChat: <AIChat selectedModel={selectedModel} activeTelemetry={activeTelemetry} />
   };
 
   return (

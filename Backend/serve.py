@@ -402,6 +402,219 @@ def get_telemetry(channel: str, offset: int = 0, length: int = 200, step: int = 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/celestrak/constellation/{group}")
+def get_celestrak_constellation_endpoint(group: str):
+    try:
+        from src.celestrak_service import get_celestrak_constellation
+        return get_celestrak_constellation(group)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/celestrak/satellite/{catnr}")
+def get_celestrak_satellite_endpoint(catnr: int):
+    try:
+        from src.celestrak_service import get_celestrak_satellite_history
+        return get_celestrak_satellite_history(catnr)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/satellite/{norad_id}/passes")
+def get_satellite_passes_endpoint(
+    norad_id: int,
+    observer_lat: float = 0.0,
+    observer_lng: float = 0.0,
+    observer_alt: float = 0.0,
+    days: int = 2,
+    min_elevation: float = 10.0,
+    x_n2yo_api_key: str = None
+):
+    try:
+        from src.n2yo_service import fetch_n2yo_passes
+        api_key = x_n2yo_api_key or os.getenv("N2YO_API_KEY")
+        return fetch_n2yo_passes(
+            norad_id=norad_id,
+            observer_lat=observer_lat,
+            observer_lng=observer_lng,
+            observer_alt=observer_alt,
+            days=days,
+            min_elevation=min_elevation,
+            api_key=api_key
+        )
+    except Exception as e:
+        try:
+            from src.n2yo_service import get_mock_passes
+            return get_mock_passes(norad_id)
+        except Exception as mock_err:
+            raise HTTPException(status_code=500, detail=f"Failed with visual fallback: {str(e)}")
+
+class CelestrakInferRequest(BaseModel):
+    mode: str
+    target: str
+
+@app.post("/celestrak/infer")
+def celestrak_infer_endpoint(req: CelestrakInferRequest):
+    try:
+        from src.celestrak_service import (
+            get_celestrak_constellation,
+            get_celestrak_satellite_history,
+            process_satellite_data_to_matrix
+        )
+        if req.mode == "constellation":
+            sat_list = get_celestrak_constellation(req.target)
+        else:
+            try:
+                catnr = int(req.target)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Target must be integer NORAD ID for single satellite mode")
+            sat_list = get_celestrak_satellite_history(catnr)
+
+        if not sat_list:
+            return {
+                "mode": req.mode,
+                "target": req.target,
+                "scores": [],
+                "anomalies": [],
+                "anomaly_count": 0
+            }
+
+        matrix, metadata = process_satellite_data_to_matrix(sat_list)
+        data = np.array(matrix, dtype=np.float32)
+        
+        signature = _load_runtime_signature()
+        window_size = int(signature.get("window_size", 100))
+        
+        prepared, original_feats = adapt_input_features(data, signature["expected_feats"])
+        
+        req_len = prepared.shape[0]
+        padded_axis0 = False
+        if req_len <= window_size:
+            padded_axis0 = True
+            pad_len = window_size + 1 - req_len
+            last_row = prepared[-1:]
+            padding = np.repeat(last_row, pad_len, axis=0)
+            prepared = np.vstack([prepared, padding])
+        
+        scores = infer_scores(prepared)
+        
+        threshold = float(signature["threshold"])
+        anomalies = []
+        for i, score in enumerate(scores):
+            meta = metadata[i] if i < len(metadata) else {}
+            anomalies.append({
+                "index": i,
+                "name": meta.get("name", "Unknown"),
+                "norad_id": meta.get("norad_id", ""),
+                "epoch": meta.get("epoch", ""),
+                "score": round(float(score), 6),
+                "anomaly": float(score) > threshold
+            })
+
+        return {
+            "mode": req.mode,
+            "target": req.target,
+            "scores": scores,
+            "anomalies": anomalies,
+            "threshold": threshold,
+            "total_points": req_len,
+            "anomaly_count": sum(1 for a in anomalies if a["anomaly"]),
+            "inference_engine": "triton"
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ExportCSVRequest(BaseModel):
+    headers: list
+    rows: list
+
+@app.post("/export/csv")
+def export_csv_endpoint(req: ExportCSVRequest):
+    try:
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(req.headers)
+        for row in req.rows:
+            writer.writerow(row)
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=telemetry_report.csv"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recordings")
+def list_recordings_endpoint():
+    try:
+        rec_dir = os.path.join(_smap_msl_root(), 'recordings')
+        os.makedirs(rec_dir, exist_ok=True)
+        files = [f for f in os.listdir(rec_dir) if f.endswith('.json')]
+        recordings = []
+        for f in files:
+            path = os.path.join(rec_dir, f)
+            try:
+                with open(path, 'r', encoding='utf-8') as file:
+                    data = json.load(file)
+                    recordings.append({
+                        "id": data.get("id", f.replace(".json", "")),
+                        "name": data.get("name", "Unnamed Recording"),
+                        "channel": data.get("channel", "unknown"),
+                        "timestamp": data.get("timestamp", ""),
+                        "points": len(data.get("data", [])),
+                        "anomaly_count": data.get("anomaly_count", 0)
+                    })
+            except Exception:
+                pass
+        recordings.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return {"recordings": recordings}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/recordings")
+def save_recording_endpoint(req: dict):
+    try:
+        import uuid
+        rec_dir = os.path.join(_smap_msl_root(), 'recordings')
+        os.makedirs(rec_dir, exist_ok=True)
+        rec_id = req.get("id") or str(uuid.uuid4())
+        req["id"] = rec_id
+        path = os.path.join(rec_dir, f"{rec_id}.json")
+        with open(path, 'w', encoding='utf-8') as file:
+            json.dump(req, file)
+        return {"status": "success", "id": rec_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recordings/{rec_id}")
+def get_recording_endpoint(rec_id: str):
+    try:
+        rec_dir = os.path.join(_smap_msl_root(), 'recordings')
+        path = os.path.join(rec_dir, f"{rec_id}.json")
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="Recording not found")
+        with open(path, 'r', encoding='utf-8') as file:
+            return json.load(file)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/recordings/{rec_id}")
+def delete_recording_endpoint(rec_id: str):
+    try:
+        rec_dir = os.path.join(_smap_msl_root(), 'recordings')
+        path = os.path.join(rec_dir, f"{rec_id}.json")
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="Recording not found")
+        os.remove(path)
+        return {"status": "success", "message": f"Deleted recording {rec_id}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     try:
         # Validate environment variables

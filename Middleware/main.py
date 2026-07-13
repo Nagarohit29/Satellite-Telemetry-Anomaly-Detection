@@ -82,7 +82,7 @@ async def metrics_middleware(request, call_next):
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from routers import predict, alerts, channels, chat, config
+from routers import predict, alerts, channels, chat, config, celestrak, recordings
 from services.backend_client import call_health
 
 app.include_router(predict.router, prefix="/api")
@@ -90,6 +90,8 @@ app.include_router(alerts.router, prefix="/api")
 app.include_router(channels.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(config.router, prefix="/api")
+app.include_router(celestrak.router, prefix="/api")
+app.include_router(recordings.router, prefix="/api")
 
 @app.get("/")
 def root():

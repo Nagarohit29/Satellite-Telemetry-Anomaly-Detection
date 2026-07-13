@@ -681,11 +681,7 @@ def chat_with_llm(messages: list, model_preference: str = None) -> str:
     models_to_try = _build_models_to_try(model_preference)
 
     if not models_to_try:
-        return (
-            "**[AI SERVICE UNAVAILABLE]**\n\n"
-            "No AI models are currently reachable. Please ensure Ollama is running locally "
-            "or configure valid cloud API keys in the settings menu."
-        )
+        return "API key is missing or select the model."
 
     last_error_msg = None
     for model_cfg in models_to_try:
@@ -740,3 +736,58 @@ def chat_with_llm(messages: list, model_preference: str = None) -> str:
         "No AI models are currently reachable. Please ensure Ollama is running locally "
         "or configure valid cloud API keys in Settings."
     )
+
+
+def execute_n2yo_tool(
+    tool_name: str,
+    arguments: dict,
+    observer_lat: float,
+    observer_lng: float,
+    observer_alt: float
+) -> str:
+    api_key = os.getenv("N2YO_API_KEY", "")
+    if not api_key:
+        return "Error: N2YO API key is missing. Please configure it in Settings."
+
+    norad_id = arguments.get("norad_id")
+    if not norad_id:
+        return "Error: missing 'norad_id' parameter."
+
+    backend_url = os.getenv("BACKEND_URL", "http://localhost:8001").rstrip("/")
+
+    if tool_name == "n2yo_get_live_position":
+        seconds = arguments.get("seconds", 200)
+        seconds = max(1, min(int(seconds), 300))
+        url = f"{backend_url}/telemetry/N2YO-{norad_id}?offset=0&length={seconds}&step=50"
+        req = urllib.request.Request(url)
+        req.add_header("X-n2yo-api-key", api_key)
+        try:
+            with urllib.request.urlopen(req, timeout=15.0) as response:
+                raw = json.loads(response.read().decode("utf-8"))
+            metadata = raw.get("metadata", [])
+            latest = metadata[0] if metadata else {"lat": 0.0, "lng": 0.0, "alt": 0.0, "sunlight": "UNKNOWN"}
+            return json.dumps({
+                "satellite_id": int(norad_id),
+                "latest_position": {
+                    "latitude": latest.get("lat", 0.0),
+                    "longitude": latest.get("lng", 0.0),
+                    "altitude": latest.get("alt", 0.0),
+                    "sunlight_state": latest.get("sunlight", "UNKNOWN")
+                }
+            })
+        except Exception as e:
+            return f"Error calling live telemetry backend: {str(e)}"
+
+    elif tool_name == "n2yo_get_radio_passes":
+        days = arguments.get("days", 2)
+        min_elevation = arguments.get("min_elevation", 10.0)
+        url = f"{backend_url}/satellite/{norad_id}/passes?observer_lat={observer_lat}&observer_lng={observer_lng}&observer_alt={observer_alt}&days={days}&min_elevation={min_elevation}"
+        req = urllib.request.Request(url)
+        req.add_header("X-n2yo-api-key", api_key)
+        try:
+            with urllib.request.urlopen(req, timeout=15.0) as response:
+                return response.read().decode("utf-8")
+        except Exception as e:
+            return f"Error calling radio passes backend: {str(e)}"
+
+    return f"Error: unknown tool '{tool_name}'"

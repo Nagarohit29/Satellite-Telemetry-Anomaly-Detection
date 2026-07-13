@@ -198,3 +198,36 @@ async def key_status():
         for provider, env_var in PROVIDER_TO_ENV.items()
         if provider not in ("ollama",)  # Exclude the legacy 'ollama' alias
     }
+
+class OllamaConfigUpdate(BaseModel):
+    model: str
+    api_base: str
+    persist: bool = True
+
+@router.get("/config/local-ollama")
+async def get_ollama_config():
+    return {
+        "model": os.getenv("OLLAMA_MODEL", "llama3.2"),
+        "api_base": os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
+    }
+
+@router.post("/config/local-ollama")
+async def update_ollama_config(data: OllamaConfigUpdate):
+    os.environ["OLLAMA_MODEL"] = data.model
+    os.environ["OLLAMA_API_BASE"] = data.api_base
+
+    if data.persist:
+        env_paths = _get_env_paths()
+        successful_writes = 0
+        for env_path in env_paths:
+            try:
+                _set_env_value(env_path, "OLLAMA_MODEL", data.model)
+                _set_env_value(env_path, "OLLAMA_API_BASE", data.api_base)
+                successful_writes += 1
+            except Exception as e:
+                logger.warning(f"Failed to write Ollama config to {env_path}: {e}")
+
+        if successful_writes == 0:
+            raise HTTPException(status_code=500, detail="Failed to persist Ollama config to env files")
+
+    return {"status": "success", "message": "Ollama local config updated"}

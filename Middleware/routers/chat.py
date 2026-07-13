@@ -49,5 +49,33 @@ async def get_models():
         models = get_available_models()
         return {"models": models}
     except Exception as e:
-        print(f"ERROR fetching models: {str(e)}")
+         print(f"ERROR fetching models: {str(e)}")
+         raise HTTPException(status_code=500, detail=str(e))
+
+class ImportReportRequest(BaseModel):
+    text: str
+    report_type: str
+    instructions: Optional[str] = ""
+    model_preference: Optional[str] = None
+
+@router.post("/chat/import-report")
+async def import_report(req: ImportReportRequest):
+    try:
+        system_content = (
+            f"You are a spacecraft telemetry AI assistant. You have been asked to analyze, "
+            f"normalize, and summarize a {req.report_type}.\n"
+        )
+        if req.instructions:
+            system_content += f"Additional user instructions:\n{req.instructions}\n"
+            
+        messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": f"Please process the following report content:\n\n{req.text}"}
+        ]
+        
+        reply = chat_with_llm(messages, req.model_preference)
+        return {"response": reply}
+    except Exception as e:
+        print(f"ERROR in import-report endpoint: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

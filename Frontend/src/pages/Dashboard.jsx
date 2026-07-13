@@ -1,13 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAnomalyData } from "../hooks/useAnomalyData";
 import AnomalyChart from "../components/AnomalyChart";
 import HeatmapGrid from "../components/HeatmapGrid";
 import ChannelSelector from "../components/ChannelSelector";
 import { RefreshCw, LayoutDashboard, Cpu, Activity, Zap, AlertTriangle } from "lucide-react";
 
-export default function Dashboard({ selectedModel }) {
+export default function Dashboard({ selectedModel, onActiveTelemetryChange }) {
   const [channel, setChannel] = useState("T-1");
   const { data, loading, error, refetch } = useAnomalyData(channel, 5000, selectedModel);
+
+  useEffect(() => {
+    if (data && onActiveTelemetryChange) {
+      onActiveTelemetryChange({
+        activeData: data.data,
+        activeChannel: channel,
+        thresholdVal: data.threshold,
+        observerLat: parseFloat(localStorage.getItem("observerLat")) || 0.0,
+        observerLng: parseFloat(localStorage.getItem("observerLng")) || 0.0,
+        observerAlt: parseFloat(localStorage.getItem("observerAlt")) || 0.0,
+      });
+    }
+  }, [data, channel, onActiveTelemetryChange]);
 
   return (
     <div style={{ color: "#fff", display: "flex", flexDirection: "column", gap: 24, paddingBottom: 40 }}>

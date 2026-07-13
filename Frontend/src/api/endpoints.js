@@ -115,3 +115,67 @@ export const deleteAPIKey = async (provider) => {
     throw new Error(`Failed to delete API key: ${error.message}`);
   }
 };
+
+export const runCelestrakInfer = async (mode, target, signal = null) => {
+  try {
+    const response = await client.post("/celestrak/infer", { mode, target }, { signal });
+    return response.data;
+  } catch (error) {
+    if (error.name === 'CanceledError') throw error;
+    console.error("Celestrak infer API error:", error);
+    throw new Error(`Failed to run Celestrak inference: ${error.message}`);
+  }
+};
+
+export const exportCSV = async (headers, rows) => {
+  try {
+    const response = await client.post("/export/csv", { headers, rows }, { responseType: 'blob' });
+    return response.data;
+  } catch (error) {
+    console.error("Export CSV API error:", error);
+    throw new Error(`Failed to export CSV: ${error.message}`);
+  }
+};
+
+export const importReport = async (text, reportType, modelPreference = null, instructions = "", signal = null) => {
+  try {
+    const payload = { text, report_type: reportType, instructions };
+    if (modelPreference) payload.model_preference = modelPreference;
+    const response = await client.post("/chat/import-report", payload, { signal });
+    return response.data;
+  } catch (error) {
+    if (error.name === 'CanceledError') throw error;
+    console.error("Import report API error:", error);
+    throw new Error(`Failed to import report: ${error.message}`);
+  }
+};
+
+export const getKeysStatus = async () => {
+  try {
+    const response = await client.get("/config/keys/status");
+    return response.data;
+  } catch (error) {
+    console.error("Get keys status API error:", error);
+    throw new Error(`Failed to get keys status: ${error.message}`);
+  }
+};
+
+export const getLocalOllamaConfig = async () => {
+  try {
+    const response = await client.get("/config/local-ollama");
+    return response.data;
+  } catch (error) {
+    console.error("Get Ollama config error:", error);
+    throw new Error(`Failed to fetch Ollama config: ${error.message}`);
+  }
+};
+
+export const updateLocalOllama = async (model, apiBase, persist = true) => {
+  try {
+    const response = await client.post("/config/local-ollama", { model, api_base: apiBase, persist });
+    return response.data;
+  } catch (error) {
+    console.error("Update Ollama config error:", error);
+    throw new Error(`Failed to update Ollama config: ${error.message}`);
+  }
+};
